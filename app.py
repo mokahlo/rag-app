@@ -3,8 +3,9 @@ import openai
 import os
 import time
 import logging
+from openai import OpenAIError
 
-# Setup logging for debugging
+# ✅ Setup logging for debugging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -33,15 +34,15 @@ def get_ai_response(prompt):
         try:
             st.info(f"🔄 Using {provider['name']} API...")
 
-            response = openai.ChatCompletion.create(
+            client = openai.OpenAI(api_key=provider["key"])  # ✅ Fix for OpenAI v1.0+
+            response = client.chat.completions.create(
                 model=provider["model"],
-                messages=[{"role": "system", "content": prompt}],
-                api_key=provider["key"]
+                messages=[{"role": "system", "content": prompt}]
             )
 
-            return response["choices"][0]["message"]["content"]
+            return response.choices[0].message.content
 
-        except openai.error.RateLimitError:
+        except OpenAIError:
             logger.warning(f"🚨 {provider['name']} API quota exceeded. Switching to next provider...")
             current_provider_index = (current_provider_index + 1) % len(api_providers)
             time.sleep(2)  # Wait before switching
@@ -73,4 +74,3 @@ if st.button("Generate AI Review"):
 
     else:
         st.warning("⚠️ Please upload all three required documents.")
-
