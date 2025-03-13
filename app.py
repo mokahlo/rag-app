@@ -6,6 +6,8 @@ from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_openai import OpenAI
 import openai
 
+st.write(f"🛠️ Running Python version: {sys.version}")
+
 # ✅ Secure OpenAI API Key Handling
 openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
 if not openai_api_key:
