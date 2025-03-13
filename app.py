@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 api_providers = [
     {"name": "OpenAI", "key": st.secrets.get("OPENAI_API_KEY"), "model": "gpt-4", "base_url": "https://api.openai.com/v1"},
     {"name": "OpenRouter", "key": st.secrets.get("OPENROUTER_API_KEY"), "model": "gpt-3.5-turbo", "base_url": "https://openrouter.ai/api/v1"},
-    {"name": "Claude", "key": st.secrets.get("CLAUDE_API_KEY"), "model": "claude-3-opus", "base_url": "https://api.anthropic.com/v1"}
+    {"name": "Claude", "key": st.secrets.get("CLAUDE_API_KEY"), "model": "claude-3-5-haiku-20241022", "base_url": "https://api.anthropic.com/v1"}
 ]
 
 # ✅ Streamlit UI: Checkboxes to enable/disable providers
