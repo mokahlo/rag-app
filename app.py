@@ -63,11 +63,12 @@ if past_project_name:
             all_docs.extend(docs)
 
         if all_docs:
-            vectorstore = Chroma.from_documents(
-                documents=all_docs,
-                embedding=embeddings,
+            vectorstore = Chroma(
+                collection_name="traffic_reviews",
+                embedding_function=embeddings,
                 persist_directory=project_folder
             )
+            vectorstore.add_documents(all_docs)
             st.success(f"✅ Project '{past_project_name}' has been indexed for AI learning!")
 
 # **🔹 Section 2: New Study Review**
