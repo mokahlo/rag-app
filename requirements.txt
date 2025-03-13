@@ -1,7 +1,5 @@
 streamlit
+openai
+pinecone-client
 langchain
-langchain-community
-langchain-openai
-langchain-chroma
-chromadb
-pysqlite3-binary
+pypdf  # Required for processing PDFs
