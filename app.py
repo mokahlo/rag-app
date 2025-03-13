@@ -3,10 +3,10 @@ import openai
 import os
 import time
 import logging
+import requests  # Required for Claude API Calls
 from openai import OpenAIError
-import requests  # ✅ Required for Claude API Calls
 
-# ✅ Setup logging for debugging
+# ✅ Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -17,19 +17,37 @@ api_providers = [
     {"name": "Claude", "key": st.secrets.get("CLAUDE_API_KEY"), "model": "claude-3-opus", "base_url": "https://api.anthropic.com/v1"}
 ]
 
-current_provider_index = 0  # Start with the first provider
+# ✅ Streamlit UI: Checkboxes to enable/disable providers
+st.sidebar.title("⚙️ AI Model Selection")
+use_openai = st.sidebar.checkbox("Use OpenAI", value=True)
+use_openrouter = st.sidebar.checkbox("Use OpenRouter", value=True)
+use_claude = st.sidebar.checkbox("Use Claude", value=True)
+
+# Filter out disabled providers
+enabled_providers = [
+    provider for provider in api_providers if (
+        (provider["name"] == "OpenAI" and use_openai) or
+        (provider["name"] == "OpenRouter" and use_openrouter) or
+        (provider["name"] == "Claude" and use_claude)
+    )
+]
+
+if not enabled_providers:
+    st.sidebar.warning("⚠️ At least one AI provider must be selected.")
+
+current_provider_index = 0  # Start with the first enabled provider
 
 # ✅ Function to get AI response with automatic fallback
 def get_ai_response(prompt):
     """Tries different API providers if one exceeds quota or fails authentication."""
     global current_provider_index
 
-    for _ in range(len(api_providers)):  # Try all providers once
-        provider = api_providers[current_provider_index]
-        
+    for _ in range(len(enabled_providers)):  # Try all enabled providers
+        provider = enabled_providers[current_provider_index]
+
         if not provider["key"]:
             logger.warning(f"⚠️ API key for {provider['name']} is missing. Skipping...")
-            current_provider_index = (current_provider_index + 1) % len(api_providers)
+            current_provider_index = (current_provider_index + 1) % len(enabled_providers)
             continue
 
         try:
@@ -65,10 +83,10 @@ def get_ai_response(prompt):
 
         except (OpenAIError, requests.exceptions.RequestException) as e:
             logger.warning(f"🚨 {provider['name']} API failed. Switching to next provider... Error: {e}")
-            current_provider_index = (current_provider_index + 1) % len(api_providers)
+            current_provider_index = (current_provider_index + 1) % len(enabled_providers)
             time.sleep(2)  # Wait before switching
 
-    st.error("🚨 All API providers failed! Please update API keys.")
+    st.error("🚨 All selected API providers failed! Please update API keys.")
     return "Error: No available API providers."
 
 # ✅ Streamlit UI
