@@ -3,6 +3,6 @@ openai
 langchain
 langchain-community
 langchain-openai
-chromadb
+chromadb==0.4.22  # Ensure this specific version
 pypdf
 tiktoken
