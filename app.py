@@ -5,7 +5,6 @@ from langchain_community.vectorstores import Chroma  # ✅ Fixed Import
 from langchain_openai.embeddings import OpenAIEmbeddings  # ✅ Fixed Import
 from langchain.llms import OpenAI
 import openai
-from chromadb.config import Settings  # ✅ ChromaDB Config Fix
 
 # ✅ Secure OpenAI API Key Handling
 openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
@@ -68,11 +67,7 @@ if past_project_name:
             vectorstore = Chroma(
                 collection_name="traffic_reviews",
                 embedding_function=embeddings,
-                persist_directory=project_folder,
-                client_settings=Settings(
-                    anonymized_telemetry=False,  # Prevents telemetry errors
-                    persist_directory=project_folder  # Ensures persistence
-                )
+                persist_directory=project_folder
             )
             vectorstore.add_documents(all_docs)
             st.success(f"✅ Project '{past_project_name}' has been indexed for AI learning!")
