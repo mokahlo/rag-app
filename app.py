@@ -1,9 +1,8 @@
 import streamlit as st
 import os
-import requests
 import openai
 import anthropic
-import pinecone
+from pinecone import Pinecone, ServerlessSpec
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Pinecone as LangchainPinecone
 from PyPDF2 import PdfReader
@@ -13,16 +12,23 @@ api_keys = {
     "OPENAI": st.secrets.get("OPENAI_API_KEY"),
     "OPENROUTER": st.secrets.get("OPENROUTER_API_KEY"),
     "CLAUDE": st.secrets.get("CLAUDE_API_KEY"),
+    "PINECONE": st.secrets.get("PINECONE_API_KEY"),
 }
 current_provider_index = 0  # Tracks which API is in use
 
-# 🔹 Pinecone Setup
-PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
-PINECONE_ENV = "us-east-1"
+# 🔹 Pinecone Setup (Corrected)
 INDEX_NAME = "ample-traffic"
+pc = Pinecone(api_key=api_keys["PINECONE"])
 
-pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
-pinecone_index = pinecone.Index(INDEX_NAME)
+if INDEX_NAME not in pc.list_indexes().names():
+    pc.create_index(
+        name=INDEX_NAME,
+        dimension=1536,
+        metric="cosine",
+        spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+    )
+
+pinecone_index = pc.Index(INDEX_NAME)
 embeddings = OpenAIEmbeddings(api_key=api_keys["OPENAI"])
 
 # 🔹 Streamlit UI
@@ -52,7 +58,7 @@ raw_text = extract_text_from_pdf(raw_study)
 annotated_text = extract_text_from_pdf(annotated_study)
 review_text = extract_text_from_pdf(review_letter)
 
-# 🔹 Store Document Embeddings
+# 🔹 Store Document Embeddings in Pinecone
 if st.button("📌 Store Study in Pinecone"):
     if raw_text and annotated_text and review_text:
         all_texts = [raw_text, annotated_text, review_text]
