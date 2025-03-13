@@ -16,10 +16,11 @@ api_keys = {
 }
 current_provider_index = 0  # Tracks which API is in use
 
-# 🔹 Pinecone Setup (Corrected)
+# 🔹 Pinecone Setup
 INDEX_NAME = "ample-traffic"
 pc = Pinecone(api_key=api_keys["PINECONE"])
 
+# Check if the index exists, if not, create it
 if INDEX_NAME not in pc.list_indexes().names():
     pc.create_index(
         name=INDEX_NAME,
@@ -28,26 +29,32 @@ if INDEX_NAME not in pc.list_indexes().names():
         spec=ServerlessSpec(cloud="aws", region="us-east-1"),
     )
 
-pinecone_index = pc.Index(INDEX_NAME)
+pinecone_index = pc.Index(INDEX_NAME)  # Correct way to access the index
 embeddings = OpenAIEmbeddings(api_key=api_keys["OPENAI"])
 
 # 🔹 Streamlit UI
+st.set_page_config(page_title="Traffic Review AI", layout="wide")
 st.title("🚦 Traffic Review AI Assistant")
 st.write("Upload traffic studies & let AI generate review comments.")
 
-# 🔹 Model Selection
+# 🔹 Model Selection in Sidebar
 st.sidebar.header("🔍 Select AI Models")
 use_openai = st.sidebar.checkbox("OpenAI (GPT-4)", True)
 use_openrouter = st.sidebar.checkbox("OpenRouter", True)
 use_claude = st.sidebar.checkbox("Claude 3.5 Haiku", True)
 
-# 🔹 File Upload
+# 🔹 File Upload Section
 st.header("📂 Upload Traffic Studies")
-raw_study = st.file_uploader("Upload Raw Study", type=["pdf"])
-annotated_study = st.file_uploader("Upload Study with Comments", type=["pdf"])
-review_letter = st.file_uploader("Upload Traffic Review Letter", type=["pdf"])
+col1, col2, col3 = st.columns(3)
 
-# 🔹 Process PDFs
+with col1:
+    raw_study = st.file_uploader("📄 Raw Study", type=["pdf"])
+with col2:
+    annotated_study = st.file_uploader("📝 Study with Comments", type=["pdf"])
+with col3:
+    review_letter = st.file_uploader("📃 Traffic Review Letter", type=["pdf"])
+
+# 🔹 Function to Extract Text from PDFs
 def extract_text_from_pdf(uploaded_file):
     if uploaded_file:
         reader = PdfReader(uploaded_file)
@@ -57,17 +64,6 @@ def extract_text_from_pdf(uploaded_file):
 raw_text = extract_text_from_pdf(raw_study)
 annotated_text = extract_text_from_pdf(annotated_study)
 review_text = extract_text_from_pdf(review_letter)
-
-# 🔹 Store Document Embeddings in Pinecone
-if st.button("📌 Store Study in Pinecone"):
-    if raw_text and annotated_text and review_text:
-        all_texts = [raw_text, annotated_text, review_text]
-        vectorstore = LangchainPinecone.from_texts(
-            texts=all_texts, embedding=embeddings, index_name=INDEX_NAME
-        )
-        st.success("✅ Traffic study stored in Pinecone!")
-    else:
-        st.warning("⚠️ Please upload all three files before proceeding.")
 
 # 🔹 AI Query Function
 def get_ai_response(prompt):
@@ -100,22 +96,54 @@ def get_ai_response(prompt):
 
     return "❌ No AI models available or quota exceeded."
 
-# 🔹 Generate AI Review
-st.header("📝 Generate AI Review Comments")
-if st.button("🚀 Generate AI Comments"):
-    if raw_text:
-        prompt = f"Review the following traffic study and provide detailed comments:\n\n{raw_text}"
-        ai_response = get_ai_response(prompt)
-        st.write("### 📝 AI Review Comments:")
-        st.write(ai_response)
-    else:
-        st.warning("⚠️ Please upload a raw study first.")
+# 🔹 AI Insights Before Storing in Pinecone
+st.header("🔍 AI Insights Before Storing")
+ai_insights = {}
 
-if st.button("📄 Generate AI Review Letter"):
+if st.button("📊 Generate AI Insights for Each Document"):
+    if raw_text:
+        ai_insights["Raw Study"] = get_ai_response(f"Summarize this traffic study:\n\n{raw_text}")
+    if annotated_text:
+        ai_insights["Annotated Study"] = get_ai_response(f"Summarize the annotations and comments:\n\n{annotated_text}")
     if review_text:
-        prompt = f"Draft a formal traffic review letter based on these comments:\n\n{review_text}"
-        ai_response = get_ai_response(prompt)
-        st.write("### 📄 AI Review Letter:")
-        st.write(ai_response)
+        ai_insights["Traffic Review Letter"] = get_ai_response(f"Summarize this traffic review letter:\n\n{review_text}")
+
+    # Display AI-generated insights
+    for doc_name, insight in ai_insights.items():
+        st.subheader(f"📄 AI Insights: {doc_name}")
+        st.write(insight)
+
+# 🔹 Store Document Embeddings in Pinecone
+if st.button("📌 Store Study in Pinecone"):
+    if raw_text and annotated_text and review_text:
+        all_texts = [raw_text, annotated_text, review_text]
+        vectorstore = LangchainPinecone.from_texts(
+            texts=all_texts, embedding=embeddings, index_name=INDEX_NAME
+        )
+        st.success("✅ Traffic study stored in Pinecone!")
     else:
-        st.warning("⚠️ Please upload a review letter first.")
+        st.warning("⚠️ Please upload all three files before proceeding.")
+
+# 🔹 AI Review Generation
+st.header("📝 Generate AI Review Comments")
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("🚀 Generate AI Comments"):
+        if raw_text:
+            prompt = f"Review the following traffic study and provide detailed comments:\n\n{raw_text}"
+            ai_response = get_ai_response(prompt)
+            st.write("### 📝 AI Review Comments:")
+            st.write(ai_response)
+        else:
+            st.warning("⚠️ Please upload a raw study first.")
+
+with col2:
+    if st.button("📄 Generate AI Review Letter"):
+        if review_text:
+            prompt = f"Draft a formal traffic review letter based on these comments:\n\n{review_text}"
+            ai_response = get_ai_response(prompt)
+            st.write("### 📄 AI Review Letter:")
+            st.write(ai_response)
+        else:
+            st.warning("⚠️ Please upload a review letter first.")
