@@ -1,5 +1,4 @@
 import os
-import json
 import openai
 import streamlit as st
 from pinecone import Pinecone, ServerlessSpec
@@ -7,10 +6,13 @@ from langchain_community.vectorstores import Pinecone as LangchainPinecone
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 
-# ✅ Load API keys and fallback models
-api_keys = json.loads(st.secrets["OPENAI_API_KEYS"])  # Store multiple API keys
-fallback_models = ["gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
-current_key_index = 0
+# ✅ Load API Keys from Streamlit Secrets
+api_providers = [
+    {"name": "OpenAI", "key": st.secrets["OPENAI_API_KEY"], "model": "gpt-4"},
+    {"name": "OpenRouter", "key": st.secrets["OPENROUTER_API_KEY"], "model": "mistral-7b"},
+    {"name": "Claude", "key": st.secrets["CLAUDE_API_KEY"], "model": "claude-3-haiku"},
+]
+current_provider_index = 0
 
 # ✅ Pinecone Configuration
 PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
@@ -19,43 +21,40 @@ INDEX_NAME = "ample-traffic"
 
 # ✅ Initialize Pinecone Client
 pc = Pinecone(api_key=PINECONE_API_KEY)
-if INDEX_NAME not in pc.list_indexes().names():
-    pc.create_index(
-        name=INDEX_NAME,
-        dimension=1536,
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region=PINECONE_ENV)
-    )
-
 index = pc.Index(INDEX_NAME)
 
-# ✅ Function to Get Embeddings with API Key Rotation
+# ✅ Function to Rotate API Providers
 def get_embedding_function():
-    global current_key_index
-    for _ in range(len(api_keys)):  # Try all available keys
+    global current_provider_index
+    for _ in range(len(api_providers)):  # Try all providers
         try:
-            return OpenAIEmbeddings(openai_api_key=api_keys[current_key_index])
+            return OpenAIEmbeddings(openai_api_key=api_providers[current_provider_index]["key"])
         except openai.error.RateLimitError:
-            st.warning(f"🚨 API key {current_key_index+1} exceeded quota. Switching to next key...")
-            current_key_index = (current_key_index + 1) % len(api_keys)
-    st.error("🚨 All API keys have exceeded their quota!")
+            st.warning(f"🚨 {api_providers[current_provider_index]['name']} API hit quota. Switching...")
+            current_provider_index = (current_provider_index + 1) % len(api_providers)
+    st.error("🚨 All API providers are exhausted!")
     return None
 
 embeddings = get_embedding_function()
 
-# ✅ Function to Get AI Response with Model Fallback
+# ✅ Function to Call AI with Automatic API Switching
 def get_ai_response(prompt):
-    for model in fallback_models:  # Step down through models if one fails
+    global current_provider_index
+
+    for _ in range(len(api_providers)):  # Try all API providers
+        provider = api_providers[current_provider_index]
         try:
             response = openai.ChatCompletion.create(
-                model=model,
+                model=provider["model"],
                 messages=[{"role": "system", "content": prompt}],
-                api_key=api_keys[current_key_index]
+                api_key=provider["key"]
             )
             return response["choices"][0]["message"]["content"]
         except openai.error.RateLimitError:
-            st.warning(f"🚨 Model {model} exceeded quota. Trying next model...")
-    st.error("🚨 All models are at capacity. Try again later.")
+            st.warning(f"🚨 {provider['name']} API exceeded quota. Switching...")
+            current_provider_index = (current_provider_index + 1) % len(api_providers)
+
+    st.error("🚨 All API providers have hit quota limits!")
     return None
 
 # ✅ Streamlit UI
@@ -72,8 +71,8 @@ if past_project_name:
     os.makedirs(project_folder, exist_ok=True)
 
     uploaded_files = {
-        "Raw Study (Consultant Submission)": st.file_uploader("Upload 'Raw Study'", type=["pdf"]),
-        "Annotated Study (City Edits)": st.file_uploader("Upload 'Annotated Study'", type=["pdf"]),
+        "Raw Study": st.file_uploader("Upload 'Raw Study'", type=["pdf"]),
+        "Annotated Study": st.file_uploader("Upload 'Annotated Study'", type=["pdf"]),
         "Traffic Review Letter": st.file_uploader("Upload 'Traffic Review Letter'", type=["pdf"])
     }
 
