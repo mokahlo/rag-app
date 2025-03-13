@@ -1,32 +1,29 @@
 import streamlit as st
 import os
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.vectorstores import Pinecone
+from langchain_community.embeddings import OpenAIEmbeddings
 from pinecone import Pinecone, ServerlessSpec
-from langchain_community.vectorstores import Pinecone as PineconeStore  # ✅ Fixed Import
-from langchain_community.embeddings import OpenAIEmbeddings  # ✅ Fixed Import
 import openai
 
-# ✅ Secure API Key Handling
-openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
-pinecone_api_key = st.secrets.get("PINECONE_API_KEY", None)
-pinecone_region = "us-east-1"  # ✅ Your region
-index_name = "ample-parking"  # ✅ Your Pinecone index name
-
-if not openai_api_key or not pinecone_api_key:
-    st.error("❌ Missing API keys! Set them in Streamlit Secrets.")
-    st.stop()  # Stop execution if API keys are missing
+# ✅ Load API Keys from Streamlit Secrets
+openai_api_key = st.secrets["OPENAI_API_KEY"]
+pinecone_api_key = st.secrets["PINECONE_API_KEY"]
+pinecone_index_name = st.secrets["PINECONE_INDEX"]
+pinecone_region = st.secrets["PINECONE_ENV"]
+pinecone_host = st.secrets["PINECONE_HOST"]
 
 # ✅ Initialize OpenAI Embeddings
 embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 
-# ✅ Correct Pinecone Initialization
+# ✅ Initialize Pinecone Client
 pc = Pinecone(api_key=pinecone_api_key)
 
 # ✅ Ensure Pinecone Index Exists
-index_list = [i.name for i in pc.list_indexes()]
-if index_name not in index_list:
+if pinecone_index_name not in pc.list_indexes().names():
     pc.create_index(
-        name=index_name,
-        dimension=1536,  # OpenAI embedding dimension
+        name=pinecone_index_name,
+        dimension=1536,
         metric="cosine",
         spec=ServerlessSpec(
             cloud="aws",
@@ -34,38 +31,48 @@ if index_name not in index_list:
         )
     )
 
-# ✅ Properly Retrieve Pinecone Index for LangChain
-index = pc.Index(index_name)  # Returns an instance of pinecone.Index
+# ✅ Connect to Pinecone Index
+index = pc.Index(pinecone_index_name)
 
-# ✅ Convert to LangChain's `PineconeStore` Using `.from_existing_index`
-vectorstore = PineconeStore.from_existing_index(
-    index_name=index_name,  # ✅ Uses the correct index name
-    embedding=embeddings  # ✅ Pass the embedding model
-)
-
-# ✅ Streamlit UI
-st.title("🚦 Traffic Review AI Assistant with Pinecone (`ample-parking`)")
+# ✅ Streamlit App UI
+st.title("🚦 Traffic Review AI Assistant")
 st.write("Upload past studies to train AI or upload a new study for automated review.")
 
-# **🔹 Upload Documents & Add to Pinecone**
+# 🔹 Upload & Process Files for AI Learning
 st.header("📚 AI Learning Area (Upload Past Studies)")
-uploaded_file = st.file_uploader("Upload a past study (TXT or PDF)", type=["txt", "pdf"])
+uploaded_file = st.file_uploader("Upload PDF Study", type=["pdf"])
 
 if uploaded_file:
-    text_content = uploaded_file.read().decode("utf-8")  # Convert to text
+    file_path = f"/tmp/{uploaded_file.name}"
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
 
-    # Store document in Pinecone (`ample-parking` index)
-    vectorstore.add_texts([text_content])
+    # ✅ Process PDF and Embed in Pinecone
+    with st.spinner("Processing document..."):
+        loader = PyPDFLoader(file_path)
+        docs = loader.load()
 
-    st.success("✅ Document indexed in Pinecone!")
+        # ✅ Store document embeddings in Pinecone
+        Pinecone.from_documents(docs, embeddings, index)
 
-# **🔹 Query AI Knowledge Base**
-st.header("🔍 Search AI Knowledge Base")
-query = st.text_input("Enter search query:")
+    st.success("✅ Document successfully indexed in Pinecone!")
 
-if query:
-    docs = vectorstore.similarity_search(query, k=3)  # Retrieve top 3 similar docs
-    st.subheader("🔎 AI-Generated Results")
+# 🔹 AI-Generated Review
+st.header("📝 New Study Review")
+st.write("Upload a new study and let AI generate review comments.")
 
-    for i, doc in enumerate(docs):
-        st.write(f"**Result {i+1}:** {doc.page_content}")
+if st.button("Generate AI Review"):
+    query = "Generate traffic review comments for a consultant study."
+    results = index.query(query, top_k=3, include_metadata=True)
+
+    if results["matches"]:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a city traffic engineer reviewing a study."},
+                {"role": "user", "content": f"Summarize these studies: {results['matches']}"},
+            ],
+        )
+        st.write(response["choices"][0]["message"]["content"])
+    else:
+        st.write("❌ No relevant studies found in the database.")
