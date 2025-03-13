@@ -37,7 +37,7 @@ if index_name not in [idx.name for idx in pc.list_indexes()]:
 index = pc.Index(index_name)
 
 # ✅ Correctly Initialize PineconeStore with LangChain
-vectorstore = PineconeStore(index, embeddings)
+vectorstore = PineconeStore(index, embeddings, text_key="text")  # 🔹 Added `text_key="text"`
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant with Pinecone (`ample-parking`)")
