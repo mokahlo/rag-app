@@ -1,92 +1,115 @@
 import streamlit as st
 import os
 import requests
-from PyPDF2 import PdfReader
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Pinecone
+import openai
+import anthropic
 import pinecone
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Pinecone as LangchainPinecone
+from PyPDF2 import PdfReader
 
-# ✅ Load API Keys from Streamlit Secrets
-OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY")
-OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY")
-CLAUDE_API_KEY = st.secrets.get("CLAUDE_API_KEY")
+# 🔹 Load API Keys from Streamlit Secrets
+api_keys = {
+    "OPENAI": st.secrets.get("OPENAI_API_KEY"),
+    "OPENROUTER": st.secrets.get("OPENROUTER_API_KEY"),
+    "CLAUDE": st.secrets.get("CLAUDE_API_KEY"),
+}
+current_provider_index = 0  # Tracks which API is in use
 
-# ✅ Pinecone Setup
+# 🔹 Pinecone Setup
 PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
 PINECONE_ENV = "us-east-1"
 INDEX_NAME = "ample-traffic"
 
 pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
-index = pinecone.Index(INDEX_NAME)
+pinecone_index = pinecone.Index(INDEX_NAME)
+embeddings = OpenAIEmbeddings(api_key=api_keys["OPENAI"])
 
-# ✅ Available AI Providers
-api_providers = {
-    "OpenAI": {"key": OPENAI_API_KEY, "url": "https://api.openai.com/v1/chat/completions"},
-    "OpenRouter": {"key": OPENROUTER_API_KEY, "url": "https://openrouter.ai/api/v1/chat/completions"},
-    "Claude": {"key": CLAUDE_API_KEY, "url": "https://api.anthropic.com/v1/messages"}
-}
-selected_providers = {}
-
-# ✅ UI Setup
+# 🔹 Streamlit UI
 st.title("🚦 Traffic Review AI Assistant")
-st.write("Upload past studies to train AI or upload a new study for automated review.")
+st.write("Upload traffic studies & let AI generate review comments.")
 
-# 🔹 Model Selection (Checkboxes)
-st.subheader("Select AI Models")
-for provider in api_providers.keys():
-    selected_providers[provider] = st.checkbox(provider, value=True)
+# 🔹 Model Selection
+st.sidebar.header("🔍 Select AI Models")
+use_openai = st.sidebar.checkbox("OpenAI (GPT-4)", True)
+use_openrouter = st.sidebar.checkbox("OpenRouter", True)
+use_claude = st.sidebar.checkbox("Claude 3.5 Haiku", True)
 
-# 🔹 PDF Text Extraction
+# 🔹 File Upload
+st.header("📂 Upload Traffic Studies")
+raw_study = st.file_uploader("Upload Raw Study", type=["pdf"])
+annotated_study = st.file_uploader("Upload Study with Comments", type=["pdf"])
+review_letter = st.file_uploader("Upload Traffic Review Letter", type=["pdf"])
+
+# 🔹 Process PDFs
 def extract_text_from_pdf(uploaded_file):
-    text = ""
-    try:
+    if uploaded_file:
         reader = PdfReader(uploaded_file)
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-    except Exception as e:
-        st.error(f"Error reading PDF: {e}")
-    return text
+        return " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
+    return ""
 
-# 🔹 API Query Function (Fallback Enabled)
-def query_ai(prompt, uploaded_file):
-    extracted_text = extract_text_from_pdf(uploaded_file)
-    for provider, details in api_providers.items():
-        if selected_providers.get(provider):
-            st.write(f"🤖 Using {provider} API...")
-            headers = {
-                "Authorization": f"Bearer {details['key']}",
-                "Content-Type": "application/json"
-            }
-            if provider == "Claude":
-                headers["anthropic-version"] = "2023-06-01"
+raw_text = extract_text_from_pdf(raw_study)
+annotated_text = extract_text_from_pdf(annotated_study)
+review_text = extract_text_from_pdf(review_letter)
 
-            payload = {
-                "model": "claude-3-5-haiku-20241022" if provider == "Claude" else "gpt-4",
-                "messages": [
-                    {"role": "system", "content": "You are a City Traffic Engineer reviewing a traffic study."},
-                    {"role": "user", "content": f"{prompt}\n\n### Study Contents:\n{extracted_text}"}
-                ],
-                "max_tokens": 500
-            }
+# 🔹 Store Document Embeddings
+if st.button("📌 Store Study in Pinecone"):
+    if raw_text and annotated_text and review_text:
+        all_texts = [raw_text, annotated_text, review_text]
+        vectorstore = LangchainPinecone.from_texts(
+            texts=all_texts, embedding=embeddings, index_name=INDEX_NAME
+        )
+        st.success("✅ Traffic study stored in Pinecone!")
+    else:
+        st.warning("⚠️ Please upload all three files before proceeding.")
 
-            response = requests.post(details["url"], headers=headers, json=payload)
-            if response.status_code == 200:
-                return response.json().get("content", response.json().get("choices", [{}])[0].get("message", {}).get("content", ""))
+# 🔹 AI Query Function
+def get_ai_response(prompt):
+    global current_provider_index
+    providers = [("OPENAI", "gpt-4"), ("OPENROUTER", "gpt-4"), ("CLAUDE", "claude-3.5-haiku")]
+
+    # Filter enabled providers
+    enabled_providers = [
+        (key, model) for key, model in providers if api_keys[key] and st.session_state.get(key, True)
+    ]
+
+    for _ in range(len(enabled_providers)):
+        key, model = enabled_providers[current_provider_index]
+        try:
+            if key == "CLAUDE":
+                client = anthropic.Anthropic(api_key=api_keys[key])
+                response = client.messages.create(
+                    model=model, max_tokens=500, messages=[{"role": "user", "content": prompt}]
+                )
+                return response["content"]
             else:
-                st.warning(f"🚨 {provider} API Error: {response.text}")
-    return "❌ All selected AI providers failed. Please check API keys and quotas."
+                response = openai.ChatCompletion.create(
+                    model=model, messages=[{"role": "system", "content": prompt}],
+                    api_key=api_keys[key]
+                )
+                return response["choices"][0]["message"]["content"]
+        except Exception as e:
+            st.warning(f"🚨 {key} API failed. Trying next provider...")
+            current_provider_index = (current_provider_index + 1) % len(enabled_providers)
 
-# 🔹 Study Upload Section
-st.header("📝 New Study Review")
-st.write("Upload a raw study, and AI will generate review comments.")
+    return "❌ No AI models available or quota exceeded."
 
-uploaded_study = st.file_uploader("Upload New Study (PDF)", type=["pdf"])
-if uploaded_study:
-    study_text = extract_text_from_pdf(uploaded_study)
-    st.text_area("Extracted Study Text", study_text, height=200)
+# 🔹 Generate AI Review
+st.header("📝 Generate AI Review Comments")
+if st.button("🚀 Generate AI Comments"):
+    if raw_text:
+        prompt = f"Review the following traffic study and provide detailed comments:\n\n{raw_text}"
+        ai_response = get_ai_response(prompt)
+        st.write("### 📝 AI Review Comments:")
+        st.write(ai_response)
+    else:
+        st.warning("⚠️ Please upload a raw study first.")
 
-    if st.button("Analyze with AI"):
-        response = query_ai("Provide feedback on this traffic study.", uploaded_study)
-        if response:
-            st.write("### 🚦 AI Review Comments")
-            st.write(response)
+if st.button("📄 Generate AI Review Letter"):
+    if review_text:
+        prompt = f"Draft a formal traffic review letter based on these comments:\n\n{review_text}"
+        ai_response = get_ai_response(prompt)
+        st.write("### 📄 AI Review Letter:")
+        st.write(ai_response)
+    else:
+        st.warning("⚠️ Please upload a review letter first.")
