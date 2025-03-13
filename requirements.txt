@@ -6,3 +6,4 @@ anthropic
 pinecone-client
 langchain
 langchain-community
+tiktoken
