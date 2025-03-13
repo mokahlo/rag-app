@@ -3,7 +3,8 @@ openai
 langchain
 langchain-community
 langchain-openai
-chromadb==0.4.22  # Ensure this specific version
+chromadb==0.4.21  # Downgrade to a stable version
 pypdf
 tiktoken
+numpy==1.23.5  # Fix for ChromaDB issues
 duckdb
