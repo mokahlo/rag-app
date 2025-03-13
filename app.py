@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from pinecone import Pinecone, ServerlessSpec
-from langchain_community.vectorstores import Pinecone  # ✅ Updated Import
+from langchain_community.vectorstores import Pinecone as PineconeStore  # ✅ Updated Import
 from langchain_community.embeddings import OpenAIEmbeddings  # ✅ Updated Import
 import openai
 
@@ -18,7 +18,8 @@ if not openai_api_key or not pinecone_api_key:
 embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 
 # ✅ Initialize Pinecone Client Correctly
-pc = Pinecone(api_key=pinecone_api_key)
+pc = Pinecone()  # No api_key argument here
+pc.init(api_key=pinecone_api_key, environment=pinecone_region)
 
 # ✅ Ensure Pinecone Index Exists
 if index_name not in pc.list_indexes().names():
@@ -34,7 +35,7 @@ if index_name not in pc.list_indexes().names():
 
 # ✅ Connect to Pinecone Index
 index = pc.Index(index_name)
-vectorstore = Pinecone(index, embeddings.embed_query, "text")
+vectorstore = PineconeStore(index, embeddings.embed_query, "text")
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant with Pinecone (`ample-parking`)")
