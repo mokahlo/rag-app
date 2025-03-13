@@ -1,37 +1,40 @@
 import streamlit as st
-import pinecone
-from langchain.vectorstores import Pinecone
-from langchain.embeddings.openai import OpenAIEmbeddings
+import os
+from pinecone import Pinecone, ServerlessSpec
+from langchain_community.vectorstores import Pinecone  # ✅ Updated Import
+from langchain_community.embeddings import OpenAIEmbeddings  # ✅ Updated Import
 import openai
 
 # ✅ Secure API Key Handling
 openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
 pinecone_api_key = st.secrets.get("PINECONE_API_KEY", None)
-pinecone_env = "us-east-1"  # ✅ Updated Pinecone region
+pinecone_region = "us-east-1"  # ✅ Your region
+index_name = "ample-parking"  # ✅ Your Pinecone index name
 
 if not openai_api_key or not pinecone_api_key:
-    st.error("❌ Missing API keys! Set OPENAI and PINECONE API keys in Streamlit Secrets.")
+    st.error("❌ Missing API keys! Set them in Streamlit Secrets.")
 
 # ✅ Initialize OpenAI Embeddings
-embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 
-# ✅ Initialize Pinecone (Using Correct API)
-pinecone.init(api_key=pinecone_api_key, environment=pinecone_env)
-
-# Define Pinecone index name
-index_name = "ample-parking"  # ✅ Your index name
+# ✅ Initialize Pinecone Client Correctly
+pc = Pinecone(api_key=pinecone_api_key)
 
 # ✅ Ensure Pinecone Index Exists
-if index_name not in pinecone.list_indexes():
-    pinecone.create_index(
+if index_name not in pc.list_indexes().names():
+    pc.create_index(
         name=index_name,
         dimension=1536,  # OpenAI embedding dimension
-        metric="cosine"
+        metric="cosine",
+        spec=ServerlessSpec(
+            cloud="aws",
+            region=pinecone_region
+        )
     )
 
 # ✅ Connect to Pinecone Index
-index = pinecone.Index(index_name)
-vectorstore = Pinecone(index, embeddings.embed_query)
+index = pc.Index(index_name)
+vectorstore = Pinecone(index, embeddings.embed_query, "text")
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant with Pinecone (`ample-parking`)")
