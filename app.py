@@ -17,12 +17,11 @@ if not openai_api_key or not pinecone_api_key:
 # ✅ Initialize OpenAI Embeddings
 embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 
-# ✅ Initialize Pinecone Client Correctly
-pc = Pinecone()  # No api_key argument here
-pc.init(api_key=pinecone_api_key, environment=pinecone_region)
+# ✅ Correct Pinecone Initialization (No `init()` needed)
+pc = Pinecone(api_key=pinecone_api_key)
 
 # ✅ Ensure Pinecone Index Exists
-if index_name not in pc.list_indexes().names():
+if index_name not in [idx.name for idx in pc.list_indexes()]:
     pc.create_index(
         name=index_name,
         dimension=1536,  # OpenAI embedding dimension
@@ -61,5 +60,4 @@ query = st.text_input("Enter search query:")
 if query:
     docs = vectorstore.similarity_search(query, k=3)  # Retrieve top 3 similar docs
     st.subheader("🔎 AI-Generated Results")
-    for i, doc in enumerate(docs):
-        st.write(f"**Result {i+1}:** {doc.page_content}")
+    for i,
