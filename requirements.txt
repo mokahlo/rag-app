@@ -1,12 +1,12 @@
+setuptools>=66.0.0  # ✅ Ensures compatibility with Python 3.12
+wheel  # ✅ Helps build packages
 streamlit
 openai
 langchain
 langchain-community
 langchain-openai
-chromadb==0.4.21  # Downgrade to stable version
+chromadb==0.4.21  # ✅ Stable ChromaDB version
 pypdf
 tiktoken
-numpy==1.23.5  # Fix for ChromaDB issues
+numpy>=1.25.0  # ✅ Uses a newer NumPy version that does NOT require distutils
 duckdb
-setuptools==65.5.0  # ✅ Fix for "distutils" missing error
-wheel  # ✅ Helps with package installations
