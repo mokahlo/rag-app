@@ -15,7 +15,7 @@ pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(INDEX_NAME)
 
 # Initialize OpenAI Embeddings (needed for storing vector representations)
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=st.secrets["OPENAI_API_KEY"])
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=st.secrets["OPENAI_API_KEY"])
 
 # 🔹 Streamlit UI Setup
 st.title("🚦 Traffic Study Database Builder")
