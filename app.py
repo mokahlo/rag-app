@@ -13,6 +13,7 @@ index_name = "ample-parking"  # ✅ Your Pinecone index name
 
 if not openai_api_key or not pinecone_api_key:
     st.error("❌ Missing API keys! Set them in Streamlit Secrets.")
+    st.stop()  # Stop execution if API keys are missing
 
 # ✅ Initialize OpenAI Embeddings
 embeddings = OpenAIEmbeddings(api_key=openai_api_key)
@@ -60,4 +61,7 @@ query = st.text_input("Enter search query:")
 if query:
     docs = vectorstore.similarity_search(query, k=3)  # Retrieve top 3 similar docs
     st.subheader("🔎 AI-Generated Results")
-    for i,
+
+    # ✅ Fixed Syntax Error in Loop
+    for i, doc in enumerate(docs):
+        st.write(f"**Result {i+1}:** {doc.page_content}")
