@@ -40,39 +40,71 @@ st.write("Upload past studies to train AI or upload a new study for automated re
 
 # 🔹 Upload & Process Files for AI Learning
 st.header("📚 AI Learning Area (Upload Past Studies)")
-uploaded_file = st.file_uploader("Upload PDF Study", type=["pdf"])
+st.write("Train AI by uploading the raw study, annotated study with comments, and the final traffic review letter.")
 
-if uploaded_file:
-    file_path = f"/tmp/{uploaded_file.name}"
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+# 📂 Upload 3 files
+raw_study = st.file_uploader("Upload Raw Study (Consultant Submission)", type=["pdf"])
+annotated_study = st.file_uploader("Upload Annotated Study (City Comments)", type=["pdf"])
+traffic_review_letter = st.file_uploader("Upload Traffic Review Letter", type=["pdf"])
 
-    # ✅ Process PDF and Embed in Pinecone
-    with st.spinner("Processing document..."):
-        loader = PyPDFLoader(file_path)
-        docs = loader.load()
+if raw_study and annotated_study and traffic_review_letter:
+    with st.spinner("Processing documents..."):
+        files = {
+            "Raw Study": raw_study,
+            "Annotated Study": annotated_study,
+            "Traffic Review Letter": traffic_review_letter
+        }
 
-        # ✅ Store document embeddings in Pinecone
-        Pinecone.from_documents(docs, embeddings, index)
+        for name, uploaded_file in files.items():
+            file_path = f"/tmp/{uploaded_file.name}"
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
 
-    st.success("✅ Document successfully indexed in Pinecone!")
+            # ✅ Process PDF and Embed in Pinecone
+            loader = PyPDFLoader(file_path)
+            docs = loader.load()
+
+            # ✅ Store document embeddings in Pinecone
+            Pinecone.from_documents(docs, embeddings, index, namespace=name)
+
+        st.success("✅ All documents successfully indexed in Pinecone!")
 
 # 🔹 AI-Generated Review
 st.header("📝 New Study Review")
-st.write("Upload a new study and let AI generate review comments.")
+st.write("Upload a new raw study and let AI generate review comments and a response letter.")
 
-if st.button("Generate AI Review"):
-    query = "Generate traffic review comments for a consultant study."
-    results = index.query(query, top_k=3, include_metadata=True)
+new_study = st.file_uploader("Upload New Study (Consultant Submission)", type=["pdf"])
 
-    if results["matches"]:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a city traffic engineer reviewing a study."},
-                {"role": "user", "content": f"Summarize these studies: {results['matches']}"},
-            ],
-        )
-        st.write(response["choices"][0]["message"]["content"])
-    else:
-        st.write("❌ No relevant studies found in the database.")
+if new_study and st.button("Generate AI Review"):
+    with st.spinner("Analyzing the study..."):
+        file_path = f"/tmp/{new_study.name}"
+        with open(file_path, "wb") as f:
+            f.write(new_study.getbuffer())
+
+        # ✅ Process and search relevant past studies
+        query = "Generate traffic review comments for a consultant study."
+        results = index.query(query, top_k=3, include_metadata=True)
+
+        if results["matches"]:
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a city traffic engineer reviewing a study."},
+                    {"role": "user", "content": f"Summarize these studies: {results['matches']}"},
+                ],
+            )
+            st.subheader("🚀 AI-Generated Comments")
+            st.write(response["choices"][0]["message"]["content"])
+
+            review_letter_prompt = "Write a professional traffic review letter based on these studies."
+            letter_response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a city traffic engineer drafting a traffic review letter."},
+                    {"role": "user", "content": f"Use these studies to draft a review letter: {results['matches']}"},
+                ],
+            )
+            st.subheader("📄 AI-Generated Traffic Review Letter")
+            st.write(letter_response["choices"][0]["message"]["content"])
+        else:
+            st.write("❌ No relevant past studies found in the database.")
