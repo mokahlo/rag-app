@@ -1,5 +1,4 @@
 streamlit
 openai
 pinecone-client
-langchain
-pypdf  # Required for processing PDFs
+langchain_community
