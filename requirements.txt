@@ -1,5 +1,20 @@
-streamlit
-openai
-pinecone-client
-tiktoken
-PyPDF2
+# Streamlit for Web UI
+streamlit==1.43.2  
+
+# Pinecone for Vector Database
+pinecone-client==3.2.2  
+
+# OpenAI for Embeddings
+openai==1.12.0  
+
+# PDF Processing & OCR
+pymupdf==1.23.6  # PyMuPDF for text extraction
+pdf2image==1.16.3  # Convert PDF pages to images
+pytesseract==0.3.10  # OCR for extracting text from images
+
+# Image Processing Dependencies
+pillow==10.1.0  # Required for pdf2image
+numpy==1.26.4  # General support for numerical operations
+
+# Pinecone-specific requirements
+langchain-community==0.2.0  # LangChain integration for vector storage
