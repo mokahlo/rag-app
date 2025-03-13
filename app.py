@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import Pinecone
+from langchain_community.vectorstores import Pinecone as LangchainPinecone
 from langchain_community.embeddings import OpenAIEmbeddings
 from pinecone import Pinecone, ServerlessSpec
 import openai
@@ -11,7 +11,6 @@ openai_api_key = st.secrets["OPENAI_API_KEY"]
 pinecone_api_key = st.secrets["PINECONE_API_KEY"]
 pinecone_index_name = st.secrets["PINECONE_INDEX"]
 pinecone_region = st.secrets["PINECONE_ENV"]
-pinecone_host = st.secrets["PINECONE_HOST"]
 
 # ✅ Initialize OpenAI Embeddings
 embeddings = OpenAIEmbeddings(api_key=openai_api_key)
@@ -55,17 +54,19 @@ if raw_study and annotated_study and traffic_review_letter:
             "Traffic Review Letter": traffic_review_letter
         }
 
+        all_docs = []
         for name, uploaded_file in files.items():
             file_path = f"/tmp/{uploaded_file.name}"
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            # ✅ Process PDF and Embed in Pinecone
+            # ✅ Process PDF and Load Documents
             loader = PyPDFLoader(file_path)
             docs = loader.load()
+            all_docs.extend(docs)
 
-            # ✅ Store document embeddings in Pinecone
-            Pinecone.from_documents(docs, embeddings, index, namespace=name)
+        # ✅ Store document embeddings in Pinecone
+        vectorstore = LangchainPinecone.from_documents(docs, embeddings, index_name=pinecone_index_name)
 
         st.success("✅ All documents successfully indexed in Pinecone!")
 
@@ -83,14 +84,14 @@ if new_study and st.button("Generate AI Review"):
 
         # ✅ Process and search relevant past studies
         query = "Generate traffic review comments for a consultant study."
-        results = index.query(query, top_k=3, include_metadata=True)
+        results = vectorstore.similarity_search(query, k=3)
 
-        if results["matches"]:
+        if results:
             response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a city traffic engineer reviewing a study."},
-                    {"role": "user", "content": f"Summarize these studies: {results['matches']}"},
+                    {"role": "user", "content": f"Summarize these studies: {results}"},
                 ],
             )
             st.subheader("🚀 AI-Generated Comments")
@@ -101,7 +102,7 @@ if new_study and st.button("Generate AI Review"):
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a city traffic engineer drafting a traffic review letter."},
-                    {"role": "user", "content": f"Use these studies to draft a review letter: {results['matches']}"},
+                    {"role": "user", "content": f"Use these studies to draft a review letter: {results}"},
                 ],
             )
             st.subheader("📄 AI-Generated Traffic Review Letter")
