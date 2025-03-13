@@ -27,9 +27,15 @@ def extract_text_from_pdf(uploaded_file):
 def get_embedding(text):
     response = openai.embeddings.create(
         input=text,
-        model="text-embedding-3-large"  # ✅ Using the latest embedding model
+        model="text-embedding-3-large"  # ✅ Ensure correct embedding model
     )
-    return response.data[0].embedding  # ✅ Extract embedding vector
+    
+    embedding = response.data[0].embedding  # Extract embedding vector
+    
+    # ✅ Debugging: Show actual embedding length
+    st.write(f"Embedding generated with {len(embedding)} dimensions")
+    
+    return embedding
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Study Database")
@@ -50,7 +56,8 @@ if uploaded_file:
             embedding_vector = get_embedding(truncated_text)
 
         # ✅ Ensure correct vector dimensions
-        if len(embedding_vector) == 1536:
+        expected_dimension = 1536
+        if len(embedding_vector) == expected_dimension:
             with st.spinner("Storing in Pinecone..."):
                 try:
                     doc_id = f"doc-{uploaded_file.name}"
@@ -59,6 +66,6 @@ if uploaded_file:
                 except pinecone.PineconeApiException as e:
                     st.error(f"🚨 Pinecone API Error: {e}")
         else:
-            st.error("❌ Embedding vector size mismatch. Expected 1536 dimensions.")
+            st.error(f"❌ Embedding vector size mismatch. Expected {expected_dimension}, got {len(embedding_vector)}")
     else:
         st.error("❌ Could not extract text from the PDF. Try another file.")
