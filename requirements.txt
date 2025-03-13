@@ -1,9 +1,5 @@
 streamlit
-requests
-PyPDF2
 openai
-anthropic
 pinecone-client
-langchain
-langchain-community
 tiktoken
+PyPDF2
