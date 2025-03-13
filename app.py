@@ -36,11 +36,8 @@ if index_name not in [idx.name for idx in pc.list_indexes()]:
 # ✅ Connect to Pinecone Index
 index = pc.Index(index_name)
 
-# ✅ Create LangChain Pinecone Wrapper Properly
-vectorstore = PineconeStore(
-    index=index,  # ✅ Correct way to pass Pinecone Index
-    embedding_function=embeddings.embed_query,  # ✅ Pass embeddings function
-)
+# ✅ Correctly Initialize PineconeStore with LangChain
+vectorstore = PineconeStore(index, embeddings)
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant with Pinecone (`ample-parking`)")
@@ -52,10 +49,9 @@ uploaded_file = st.file_uploader("Upload a past study (TXT or PDF)", type=["txt"
 
 if uploaded_file:
     text_content = uploaded_file.read().decode("utf-8")  # Convert to text
-    doc_embedding = embeddings.embed_query(text_content)
 
     # Store document in Pinecone (`ample-parking` index)
-    vectorstore.add_texts([text_content], embeddings=[doc_embedding])
+    vectorstore.add_texts([text_content])
 
     st.success("✅ Document indexed in Pinecone!")
 
