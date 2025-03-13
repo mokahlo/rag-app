@@ -22,7 +22,7 @@ embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 pc = Pinecone(api_key=pinecone_api_key)
 
 # ✅ Ensure Pinecone Index Exists
-index_list = pc.list_indexes().names()
+index_list = [i.name for i in pc.list_indexes()]
 if index_name not in index_list:
     pc.create_index(
         name=index_name,
@@ -34,11 +34,14 @@ if index_name not in index_list:
         )
     )
 
-# ✅ Properly Retrieve Pinecone Index (Avoiding Wrong Class Error)
-index = pc.Index(index_name)  # This should return a pinecone.Index instance
+# ✅ Properly Retrieve Pinecone Index for LangChain
+index = pc.Index(index_name)  # Returns an instance of pinecone.Index
 
-# ✅ Correctly Initialize PineconeStore with LangChain
-vectorstore = PineconeStore.from_existing_index(index_name, embeddings, text_key="text")  # ✅ FIXED
+# ✅ Convert to LangChain's `PineconeStore` Using `.from_existing_index`
+vectorstore = PineconeStore.from_existing_index(
+    index_name=index_name,  # ✅ Uses the correct index name
+    embedding=embeddings  # ✅ Pass the embedding model
+)
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant with Pinecone (`ample-parking`)")
