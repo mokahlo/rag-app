@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-import shutil
 from langchain.document_loaders.pdf import PyPDFLoader
 from langchain.vectorstores import Chroma
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -10,73 +9,91 @@ import openai
 # Set OpenAI API Key (Replace with your actual key)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Define main storage directory
-PROJECTS_DIR = "projects"
+# Define directories for past and new projects
+LEARNING_DIR = "rag_learning"
+NEW_STUDY_DIR = "new_studies"
 
-# Ensure directory exists
-os.makedirs(PROJECTS_DIR, exist_ok=True)
+# Ensure directories exist
+os.makedirs(LEARNING_DIR, exist_ok=True)
+os.makedirs(NEW_STUDY_DIR, exist_ok=True)
 
 # Streamlit UI
 st.title("Traffic Review AI Assistant")
-st.write("Upload a raw consultant report, and the AI will generate review comments and a traffic review letter based on past projects.")
+st.write("Upload past traffic studies to train AI or upload a new study for automatic review.")
 
-# **Step 1: Enter Project Name**
-project_name = st.text_input("Enter project name:")
-if project_name:
-    project_folder = os.path.join(PROJECTS_DIR, project_name)
+# **Section 1: RAG Learning Area**
+st.header("📚 AI Learning Area (Upload Past Studies)")
+st.write("Upload past consultant studies, annotated reviews, and response letters to improve AI learning.")
+
+# Enter project name for training data
+past_project_name = st.text_input("Enter past project name for AI training:")
+if past_project_name:
+    project_folder = os.path.join(LEARNING_DIR, past_project_name)
     os.makedirs(project_folder, exist_ok=True)
 
-    # Define subfolders for each document type
-    file_paths = {
-        "Raw Consultant Study": os.path.join(project_folder, "raw_study.pdf"),
+    # Define subfolders for past documents
+    past_files = {
+        "Raw Study (Consultant Submission)": os.path.join(project_folder, "raw_study.pdf"),
         "Annotated Study (City Edits)": os.path.join(project_folder, "annotated_study.pdf"),
         "Traffic Review Response Letter": os.path.join(project_folder, "review_letter.pdf")
     }
 
-    uploaded_files = {}
+    uploaded_past_files = {}
 
-    # **Step 2: Upload Files**
-    for category, file_path in file_paths.items():
+    # Upload files
+    for category, file_path in past_files.items():
         uploaded_file = st.file_uploader(f"Upload '{category}'", type=["pdf"])
         if uploaded_file:
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-            uploaded_files[category] = file_path
-            st.success(f"Uploaded '{category}' for project '{project_name}'")
+            uploaded_past_files[category] = file_path
+            st.success(f"Uploaded '{category}' for past project '{past_project_name}'")
 
-    # **Step 3: Process Files and Train AI**
-    if len(uploaded_files) == 3:  # Ensure all three files are uploaded
+    # Process and train AI on past data
+    if len(uploaded_past_files) == 3:
         all_docs = []
-        
-        for category, file_path in uploaded_files.items():
+        for file_path in uploaded_past_files.values():
             loader = PyPDFLoader(file_path)
             docs = loader.load()
             all_docs.extend(docs)
 
         if all_docs:
-            # Create a vector store and save it for future queries
             vectorstore = Chroma.from_documents(all_docs, OpenAIEmbeddings(), persist_directory=project_folder)
-            st.success(f"Project '{project_name}' has been indexed for AI review!")
+            st.success(f"Past project '{past_project_name}' has been indexed for AI learning!")
 
-# **Step 4: Generate AI Review Comments & Letter**
-st.subheader("Generate AI-Based Traffic Review")
+# **Section 2: New Study Review Area**
+st.header("📝 New Study Review")
+st.write("Upload a new raw consultant study and let AI generate comments and a traffic review letter.")
 
-# Select a project to generate a review
-available_projects = [p for p in os.listdir(PROJECTS_DIR) if os.path.isdir(os.path.join(PROJECTS_DIR, p))]
-selected_project = st.selectbox("Select a project for AI review:", available_projects if available_projects else ["No projects available"])
+# Enter new project name
+new_project_name = st.text_input("Enter new project name:")
+if new_project_name:
+    new_project_folder = os.path.join(NEW_STUDY_DIR, new_project_name)
+    os.makedirs(new_project_folder, exist_ok=True)
+
+    # Upload raw study
+    raw_study_file = st.file_uploader("Upload 'Raw Study (Consultant Submission)'", type=["pdf"])
+    if raw_study_file:
+        raw_study_path = os.path.join(new_project_folder, "raw_study.pdf")
+        with open(raw_study_path, "wb") as f:
+            f.write(raw_study_file.getbuffer())
+        st.success(f"Uploaded raw study for project '{new_project_name}'")
+
+# **AI-Generated Comments & Review Letter**
+st.subheader("🚀 Generate AI Review")
+selected_project = st.selectbox("Select a project for AI review:", os.listdir(NEW_STUDY_DIR) if os.listdir(NEW_STUDY_DIR) else ["No projects available"])
 
 if selected_project and selected_project != "No projects available":
-    project_folder = os.path.join(PROJECTS_DIR, selected_project)
-    
-    # Load the stored vector database
-    vectorstore = Chroma(persist_directory=project_folder, embedding_function=OpenAIEmbeddings())
-    
+    project_folder = os.path.join(NEW_STUDY_DIR, selected_project)
+
+    # Load stored knowledge base
+    vectorstore = Chroma(persist_directory=LEARNING_DIR, embedding_function=OpenAIEmbeddings())
+
     st.subheader("1️⃣ AI-Generated Comments on Consultant’s Study")
     if st.button("Generate AI Comments"):
         comments_prompt = """
         You are a City Traffic Engineer reviewing a private consultant’s traffic impact analysis.
-        Based on past projects, generate review comments for this study, identifying necessary improvements.
-        Keep the feedback professional and aligned with City of Phoenix policies.
+        Based on past projects, generate professional review comments identifying necessary improvements.
         """
         docs = vectorstore.similarity_search(comments_prompt)
         if docs:
