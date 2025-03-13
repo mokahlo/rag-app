@@ -54,4 +54,14 @@ if st.button("Get Answer"):
 
         if all_docs:
             # Create vector store
-            vectorstore = Chroma.from
+            vectorstore = Chroma.from_documents(all_docs, embedding=OpenAIEmbeddings())
+
+            # Perform similarity search
+            docs = vectorstore.similarity_search(query)
+            if docs:
+                st.write("**Answer:**")
+                st.write(docs[0].page_content)
+            else:
+                st.write("No relevant information found.")
+        else:
+            st.write("No files found in this category.")
