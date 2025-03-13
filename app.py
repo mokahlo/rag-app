@@ -30,8 +30,8 @@ if pinecone_index_name not in pc.list_indexes().names():
         )
     )
 
-# ✅ Connect to Pinecone Index
-index = pc.Index(pinecone_index_name)
+# ✅ Connect to Pinecone Index Properly
+index = pc.Index(pinecone_index_name)  # This ensures we get the correct instance
 
 # ✅ Streamlit App UI
 st.title("🚦 Traffic Review AI Assistant")
@@ -61,51 +61,4 @@ if raw_study and annotated_study and traffic_review_letter:
                 f.write(uploaded_file.getbuffer())
 
             # ✅ Process PDF and Load Documents
-            loader = PyPDFLoader(file_path)
-            docs = loader.load()
-            all_docs.extend(docs)
-
-        # ✅ Store document embeddings in Pinecone
-        vectorstore = LangchainPinecone.from_documents(docs, embeddings, index_name=pinecone_index_name)
-
-        st.success("✅ All documents successfully indexed in Pinecone!")
-
-# 🔹 AI-Generated Review
-st.header("📝 New Study Review")
-st.write("Upload a new raw study and let AI generate review comments and a response letter.")
-
-new_study = st.file_uploader("Upload New Study (Consultant Submission)", type=["pdf"])
-
-if new_study and st.button("Generate AI Review"):
-    with st.spinner("Analyzing the study..."):
-        file_path = f"/tmp/{new_study.name}"
-        with open(file_path, "wb") as f:
-            f.write(new_study.getbuffer())
-
-        # ✅ Process and search relevant past studies
-        query = "Generate traffic review comments for a consultant study."
-        results = vectorstore.similarity_search(query, k=3)
-
-        if results:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a city traffic engineer reviewing a study."},
-                    {"role": "user", "content": f"Summarize these studies: {results}"},
-                ],
-            )
-            st.subheader("🚀 AI-Generated Comments")
-            st.write(response["choices"][0]["message"]["content"])
-
-            review_letter_prompt = "Write a professional traffic review letter based on these studies."
-            letter_response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a city traffic engineer drafting a traffic review letter."},
-                    {"role": "user", "content": f"Use these studies to draft a review letter: {results}"},
-                ],
-            )
-            st.subheader("📄 AI-Generated Traffic Review Letter")
-            st.write(letter_response["choices"][0]["message"]["content"])
-        else:
-            st.write("❌ No relevant past studies found in the database.")
+            
