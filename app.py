@@ -7,8 +7,9 @@ from langchain_community.vectorstores import Pinecone as LangchainPinecone
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 
-# ✅ Load API keys with rotation
-api_keys = json.loads(st.secrets["OPENAI_API_KEYS"])
+# ✅ Load API keys and fallback models
+api_keys = json.loads(st.secrets["OPENAI_API_KEYS"])  # Store multiple API keys
+fallback_models = ["gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
 current_key_index = 0
 
 # ✅ Pinecone Configuration
@@ -28,7 +29,7 @@ if INDEX_NAME not in pc.list_indexes().names():
 
 index = pc.Index(INDEX_NAME)
 
-# ✅ Initialize OpenAI Embeddings
+# ✅ Function to Get Embeddings with API Key Rotation
 def get_embedding_function():
     global current_key_index
     for _ in range(len(api_keys)):  # Try all available keys
@@ -41,6 +42,21 @@ def get_embedding_function():
     return None
 
 embeddings = get_embedding_function()
+
+# ✅ Function to Get AI Response with Model Fallback
+def get_ai_response(prompt):
+    for model in fallback_models:  # Step down through models if one fails
+        try:
+            response = openai.ChatCompletion.create(
+                model=model,
+                messages=[{"role": "system", "content": prompt}],
+                api_key=api_keys[current_key_index]
+            )
+            return response["choices"][0]["message"]["content"]
+        except openai.error.RateLimitError:
+            st.warning(f"🚨 Model {model} exceeded quota. Trying next model...")
+    st.error("🚨 All models are at capacity. Try again later.")
+    return None
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant")
@@ -97,12 +113,10 @@ if st.button("Generate AI Comments"):
     docs = vectorstore.similarity_search(query)
 
     if docs:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "system", "content": query + "\n\n" + docs[0].page_content}]
-        )
-        st.write("### ✍️ AI-Generated Comments:")
-        st.write(response["choices"][0]["message"]["content"])
+        ai_response = get_ai_response(query + "\n\n" + docs[0].page_content)
+        if ai_response:
+            st.write("### ✍️ AI-Generated Comments:")
+            st.write(ai_response)
     else:
         st.write("❌ No relevant information found.")
 
@@ -111,11 +125,9 @@ if st.button("Generate Traffic Review Letter"):
     docs = vectorstore.similarity_search(query)
 
     if docs:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "system", "content": query + "\n\n" + docs[0].page_content}]
-        )
-        st.write("### 📄 AI-Generated Traffic Review Letter:")
-        st.write(response["choices"][0]["message"]["content"])
+        ai_response = get_ai_response(query + "\n\n" + docs[0].page_content)
+        if ai_response:
+            st.write("### 📄 AI-Generated Traffic Review Letter:")
+            st.write(ai_response)
     else:
         st.write("❌ No relevant information found.")
