@@ -1,15 +1,16 @@
 import streamlit as st
 import os
-from langchain_community.document_loaders import PyPDFLoader  # ✅ Fixed Import
-from langchain_community.vectorstores import Chroma  # ✅ Fixed Import
-from langchain_openai.embeddings import OpenAIEmbeddings  # ✅ Fixed Import
-from langchain.llms import OpenAI
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.vectorstores import Chroma
+from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAI
 import openai
 
 # ✅ Secure OpenAI API Key Handling
 openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
 if not openai_api_key:
     st.error("❌ OpenAI API key is missing! Set it in Streamlit Secrets.")
+    st.stop()
 
 # ✅ Define Storage Directories
 LEARNING_DIR = "rag_learning"
@@ -63,7 +64,7 @@ if past_project_name:
             all_docs.extend(docs)
 
         if all_docs:
-            # ✅ Properly Initialize ChromaDB with Fixes
+            # ✅ Initialize ChromaDB Correctly
             vectorstore = Chroma(
                 collection_name="traffic_reviews",
                 embedding_function=embeddings,
@@ -109,7 +110,7 @@ if selected_project and selected_project != "No projects available":
         """
         docs = vectorstore.similarity_search(comments_prompt)
         if docs:
-            ai_comments = OpenAI().complete(comments_prompt + "\n\n" + docs[0].page_content)
+            ai_comments = OpenAI(api_key=openai_api_key).complete(comments_prompt + "\n\n" + docs[0].page_content)
             st.write("### ✍️ AI-Generated Comments:")
             st.write(ai_comments)
         else:
@@ -123,7 +124,7 @@ if selected_project and selected_project != "No projects available":
         """
         docs = vectorstore.similarity_search(review_letter_prompt)
         if docs:
-            ai_review_letter = OpenAI().complete(review_letter_prompt + "\n\n" + docs[0].page_content)
+            ai_review_letter = OpenAI(api_key=openai_api_key).complete(review_letter_prompt + "\n\n" + docs[0].page_content)
             st.write("### 📄 AI-Generated Traffic Review Letter:")
             st.write(ai_review_letter)
         else:
