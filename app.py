@@ -18,7 +18,7 @@ if not openai_api_key or not pinecone_api_key:
 # ✅ Initialize OpenAI Embeddings
 embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 
-# ✅ Correct Pinecone Initialization (No `init()` needed)
+# ✅ Correct Pinecone Initialization
 pc = Pinecone(api_key=pinecone_api_key)
 
 # ✅ Ensure Pinecone Index Exists
@@ -35,7 +35,14 @@ if index_name not in [idx.name for idx in pc.list_indexes()]:
 
 # ✅ Connect to Pinecone Index
 index = pc.Index(index_name)
-vectorstore = PineconeStore(index, embeddings.embed_query, "text")
+
+# ✅ Create LangChain Pinecone Wrapper Properly
+vectorstore = PineconeStore(
+    index=index_name,  # Use index name, not Index object
+    embedding_function=embeddings.embed_query,
+    pinecone_api_key=pinecone_api_key,
+    environment=pinecone_region
+)
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant with Pinecone (`ample-parking`)")
