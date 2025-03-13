@@ -1,71 +1,67 @@
 import streamlit as st
-import openai
-import pinecone
 import os
-import PyPDF2
+import uuid
+from pinecone import Pinecone
+from langchain_openai.embeddings import OpenAIEmbeddings
+from PyPDF2 import PdfReader
 
-# ✅ Load API keys from Streamlit secrets
-OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY")
-PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
+# 🔹 Pinecone Configuration
+PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
 PINECONE_ENV = "us-east-1"
 INDEX_NAME = "ample-traffic"
 
-# ✅ Initialize OpenAI
-openai.api_key = OPENAI_API_KEY
-
-# ✅ Initialize Pinecone
-pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
+# Initialize Pinecone client
+pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(INDEX_NAME)
 
-# ✅ Function to extract text from PDF
-def extract_text_from_pdf(uploaded_file):
-    reader = PyPDF2.PdfReader(uploaded_file)
-    text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-    return text
+# Initialize OpenAI Embeddings (needed for storing vector representations)
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=st.secrets["OPENAI_API_KEY"])
 
-# ✅ Function to generate embeddings using OpenAI
-def get_embedding(text):
-    response = openai.embeddings.create(
-        input=text,
-        model="text-embedding-3-small"  # ✅ FIX: Use 1536-dimension model
-    )
+# 🔹 Streamlit UI Setup
+st.title("🚦 Traffic Study Database Builder")
+st.write("Upload a traffic study, its annotated version, and the review letter to build the AI training dataset.")
+
+# 📂 User Inputs for Project Name
+project_name = st.text_input("Enter Project Name:")
+project_id = str(uuid.uuid4()) if project_name else None
+
+# 📂 File Uploads for Study Documents
+raw_study = st.file_uploader("Upload Raw Study (Consultant Submission)", type=["pdf"])
+annotated_study = st.file_uploader("Upload Annotated Study (City Comments)", type=["pdf"])
+review_letter = st.file_uploader("Upload Review Letter (City Response)", type=["pdf"])
+
+# 🔹 Function to Extract Text from PDFs
+def extract_text_from_pdf(file):
+    if file is not None:
+        reader = PdfReader(file)
+        return "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+    return ""
+
+# 🔹 Store Documents in Pinecone
+if st.button("Store in Database") and project_name and raw_study and annotated_study and review_letter:
+    st.write("📄 Extracting text from PDFs...")
     
-    embedding = response.data[0].embedding  # Extract embedding vector
+    raw_text = extract_text_from_pdf(raw_study)
+    annotated_text = extract_text_from_pdf(annotated_study)
+    review_text = extract_text_from_pdf(review_letter)
     
-    # ✅ Debugging: Show actual embedding length
-    st.write(f"Embedding generated with {len(embedding)} dimensions")
+    # Convert text to embeddings
+    raw_vector = embeddings.embed_query(raw_text)
+    annotated_vector = embeddings.embed_query(annotated_text)
+    review_vector = embeddings.embed_query(review_text)
     
-    return embedding
-
-# ✅ Streamlit UI
-st.title("🚦 Traffic Study Database")
-st.write("Upload past traffic studies to store them in Pinecone for easy retrieval.")
-
-# 📂 Upload PDF File
-uploaded_file = st.file_uploader("Upload a Traffic Study (PDF)", type=["pdf"])
-
-if uploaded_file:
-    with st.spinner("Extracting text from the PDF..."):
-        extracted_text = extract_text_from_pdf(uploaded_file)
-
-    if extracted_text:
-        # ✅ Limit metadata text size (Pinecone has limits)
-        truncated_text = extracted_text[:3000]  # Limit to 3000 chars for safety
-
-        with st.spinner("Generating embeddings..."):
-            embedding_vector = get_embedding(truncated_text)
-
-        # ✅ Ensure correct vector dimensions
-        expected_dimension = 1536  # 🔹 Matches Pinecone Index
-        if len(embedding_vector) == expected_dimension:
-            with st.spinner("Storing in Pinecone..."):
-                try:
-                    doc_id = f"doc-{uploaded_file.name}"
-                    index.upsert(vectors=[(doc_id, embedding_vector, {"text": truncated_text})])
-                    st.success("✅ Document stored successfully in Pinecone!")
-                except pinecone.PineconeApiException as e:
-                    st.error(f"🚨 Pinecone API Error: {e}")
-        else:
-            st.error(f"❌ Embedding vector size mismatch. Expected {expected_dimension}, got {len(embedding_vector)}")
+    # Ensure correct dimensions
+    if len(raw_vector) == 1536 and len(annotated_vector) == 1536 and len(review_vector) == 1536:
+        
+        # Upsert into Pinecone
+        index.upsert(
+            vectors=[
+                (f"{project_id}_raw", raw_vector, {"text": raw_text, "type": "raw_study", "project": project_name}),
+                (f"{project_id}_annotated", annotated_vector, {"text": annotated_text, "type": "annotated_study", "project": project_name}),
+                (f"{project_id}_review", review_vector, {"text": review_text, "type": "review_letter", "project": project_name})
+            ]
+        )
+        
+        st.success(f"✅ Project '{project_name}' successfully stored in Pinecone!")
     else:
-        st.error("❌ Could not extract text from the PDF. Try another file.")
+        st.error("❌ Embedding size mismatch. Ensure text embeddings have 1536 dimensions.")
