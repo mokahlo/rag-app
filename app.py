@@ -2,11 +2,11 @@ import streamlit as st
 import os
 from langchain.document_loaders.pdf import PyPDFLoader
 from langchain.vectorstores import Chroma
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.llms import OpenAI
 import openai
 
-# Set OpenAI API Key (Replace with your actual key)
+# Set OpenAI API Key (Ensure this is set in Streamlit Cloud secrets)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Define directories for past and new projects
@@ -58,7 +58,9 @@ if past_project_name:
             all_docs.extend(docs)
 
         if all_docs:
-            vectorstore = Chroma.from_documents(all_docs, OpenAIEmbeddings(), persist_directory=project_folder)
+            # Corrected OpenAIEmbeddings initialization
+            embeddings = OpenAIEmbeddings(openai_api_key=openai.api_key)
+            vectorstore = Chroma.from_documents(all_docs, embeddings, persist_directory=project_folder)
             st.success(f"Past project '{past_project_name}' has been indexed for AI learning!")
 
 # **Section 2: New Study Review Area**
@@ -87,7 +89,8 @@ if selected_project and selected_project != "No projects available":
     project_folder = os.path.join(NEW_STUDY_DIR, selected_project)
 
     # Load stored knowledge base
-    vectorstore = Chroma(persist_directory=LEARNING_DIR, embedding_function=OpenAIEmbeddings())
+    embeddings = OpenAIEmbeddings(openai_api_key=openai.api_key)
+    vectorstore = Chroma(persist_directory=LEARNING_DIR, embedding_function=embeddings)
 
     st.subheader("1️⃣ AI-Generated Comments on Consultant’s Study")
     if st.button("Generate AI Comments"):
