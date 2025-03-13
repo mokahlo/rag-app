@@ -1,67 +1,77 @@
 import streamlit as st
 import os
-import uuid
+import fitz  # PyMuPDF for text extraction
+import openai
+import pinecone
+from pdf2image import convert_from_path
+from pytesseract import image_to_string  # OCR for extracting text from figures
 from pinecone import Pinecone
-from langchain_openai.embeddings import OpenAIEmbeddings
-from PyPDF2 import PdfReader
 
-# 🔹 Pinecone Configuration
-PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
-PINECONE_ENV = "us-east-1"
-INDEX_NAME = "ample-traffic"
+# 🔹 Set up API keys
+api_keys = {
+    "OPENAI": st.secrets["OPENAI_API_KEY"],
+    "PINECONE": st.secrets["PINECONE_API_KEY"]
+}
+pinecone_env = "us-east-1"
+index_name = "ample-traffic"
 
-# Initialize Pinecone client
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(INDEX_NAME)
+# 🔹 Initialize Pinecone
+pc = Pinecone(api_key=api_keys["PINECONE"])
+index = pc.Index(index_name)
 
-# Initialize OpenAI Embeddings (needed for storing vector representations)
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=st.secrets["OPENAI_API_KEY"])
+# Function: Extract text from PDF
+def extract_text_from_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
+    text = ""
+    for page in doc:
+        text += page.get_text("text") + "\n"
+    return text
 
-# 🔹 Streamlit UI Setup
-st.title("🚦 Traffic Study Database Builder")
-st.write("Upload a traffic study, its annotated version, and the review letter to build the AI training dataset.")
+# Function: Extract text from figures using OCR
+def extract_text_from_images(pdf_path):
+    images = convert_from_path(pdf_path)
+    extracted_text = ""
+    for image in images:
+        extracted_text += image_to_string(image) + "\n"
+    return extracted_text
 
-# 📂 User Inputs for Project Name
-project_name = st.text_input("Enter Project Name:")
-project_id = str(uuid.uuid4()) if project_name else None
+# Function: Generate text embeddings
+def get_embedding(text):
+    response = openai.embeddings.create(
+        input=text,
+        model="text-embedding-3-large"
+    )
+    return response.data[0].embedding  # Ensuring 1536 dimensions
 
-# 📂 File Uploads for Study Documents
-raw_study = st.file_uploader("Upload Raw Study (Consultant Submission)", type=["pdf"])
-annotated_study = st.file_uploader("Upload Annotated Study (City Comments)", type=["pdf"])
-review_letter = st.file_uploader("Upload Review Letter (City Response)", type=["pdf"])
-
-# 🔹 Function to Extract Text from PDFs
-def extract_text_from_pdf(file):
-    if file is not None:
-        reader = PdfReader(file)
-        return "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-    return ""
-
-# 🔹 Store Documents in Pinecone
-if st.button("Store in Database") and project_name and raw_study and annotated_study and review_letter:
-    st.write("📄 Extracting text from PDFs...")
+# Function: Process and upload to Pinecone
+def process_and_store(pdf_path, doc_id):
+    text_content = extract_text_from_pdf(pdf_path)
+    figure_text = extract_text_from_images(pdf_path)
     
-    raw_text = extract_text_from_pdf(raw_study)
-    annotated_text = extract_text_from_pdf(annotated_study)
-    review_text = extract_text_from_pdf(review_letter)
-    
-    # Convert text to embeddings
-    raw_vector = embeddings.embed_query(raw_text)
-    annotated_vector = embeddings.embed_query(annotated_text)
-    review_vector = embeddings.embed_query(review_text)
-    
-    # Ensure correct dimensions
-    if len(raw_vector) == 1536 and len(annotated_vector) == 1536 and len(review_vector) == 1536:
-        
-        # Upsert into Pinecone
-        index.upsert(
-            vectors=[
-                (f"{project_id}_raw", raw_vector, {"text": raw_text, "type": "raw_study", "project": project_name}),
-                (f"{project_id}_annotated", annotated_vector, {"text": annotated_text, "type": "annotated_study", "project": project_name}),
-                (f"{project_id}_review", review_vector, {"text": review_text, "type": "review_letter", "project": project_name})
-            ]
-        )
-        
-        st.success(f"✅ Project '{project_name}' successfully stored in Pinecone!")
+    full_text = text_content + "\n[Figures]\n" + figure_text
+    embedding_vector = get_embedding(full_text)
+
+    if len(embedding_vector) == 1536:
+        index.upsert(vectors=[(doc_id, embedding_vector, {"text": full_text})])
+        st.success(f"✅ {doc_id} successfully stored in Pinecone!")
     else:
-        st.error("❌ Embedding size mismatch. Ensure text embeddings have 1536 dimensions.")
+        st.error(f"❌ Embedding size mismatch. Got {len(embedding_vector)}, expected 1536.")
+
+# 🔹 Streamlit UI
+st.title("🚦 Traffic Study Database Builder")
+st.write("Upload raw studies, annotated versions, and final review letters.")
+
+# Upload files
+raw_study = st.file_uploader("📂 Upload Raw Study", type=["pdf"])
+annotated_study = st.file_uploader("📂 Upload Annotated Study", type=["pdf"])
+review_letter = st.file_uploader("📂 Upload Final Review Letter", type=["pdf"])
+
+if st.button("🚀 Process and Store in Pinecone"):
+    if raw_study and annotated_study and review_letter:
+        process_and_store(raw_study, "raw_study")
+        process_and_store(annotated_study, "annotated_study")
+        process_and_store(review_letter, "review_letter")
+        st.success("✅ All documents stored successfully!")
+    else:
+        st.error("❌ Please upload all three required files!")
+
