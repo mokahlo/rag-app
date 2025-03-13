@@ -8,5 +8,5 @@ pypdf
 tiktoken
 numpy==1.23.5  # Fix for ChromaDB issues
 duckdb
-setuptools  # ✅ Fixes "distutils" missing error
+setuptools==65.5.0  # ✅ Fix for "distutils" missing error
 wheel  # ✅ Helps with package installations
