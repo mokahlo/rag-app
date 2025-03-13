@@ -7,7 +7,7 @@ import openai
 # ✅ Secure API Key Handling
 openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
 pinecone_api_key = st.secrets.get("PINECONE_API_KEY", None)
-pinecone_env = st.secrets.get("PINECONE_ENV", "us-west1-gcp")  # Default to US region
+pinecone_env = st.secrets.get("PINECONE_ENV", "us-west1-gcp")  # Default Pinecone region
 
 if not openai_api_key or not pinecone_api_key:
     st.error("❌ Missing API keys! Set OPENAI and PINECONE API keys in Streamlit Secrets.")
@@ -15,18 +15,23 @@ if not openai_api_key or not pinecone_api_key:
 # ✅ Initialize OpenAI Embeddings
 embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 
-# ✅ Initialize Pinecone
-pinecone.init(api_key=pinecone_api_key, environment=pinecone_env)
+# ✅ Initialize Pinecone (Fixed New API)
+pinecone_client = pinecone.Pinecone(api_key=pinecone_api_key)
 
 # Define Pinecone index name
 index_name = "traffic-reviews"
 
 # ✅ Ensure Pinecone Index Exists
-if index_name not in pinecone.list_indexes():
-    pinecone.create_index(index_name, dimension=1536)  # Adjust dimension based on OpenAI embeddings
+if index_name not in pinecone_client.list_indexes():
+    pinecone_client.create_index(
+        name=index_name,
+        dimension=1536,  # OpenAI embedding dimension
+        metric="cosine"
+    )
 
 # ✅ Connect to Pinecone Index
-vectorstore = Pinecone(index_name=index_name, embedding_function=embeddings)
+index = pinecone_client.Index(index_name)
+vectorstore = Pinecone(index, embeddings.embed_query)
 
 # ✅ Streamlit UI
 st.title("🚦 Traffic Review AI Assistant with Pinecone")
