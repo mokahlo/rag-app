@@ -1,8 +1,8 @@
 import streamlit as st
 import os
 from pinecone import Pinecone, ServerlessSpec
-from langchain_community.vectorstores import Pinecone as PineconeStore  # ✅ Updated Import
-from langchain_community.embeddings import OpenAIEmbeddings  # ✅ Updated Import
+from langchain_community.vectorstores import Pinecone as PineconeStore  # ✅ Fixed Import
+from langchain_community.embeddings import OpenAIEmbeddings  # ✅ Fixed Import
 import openai
 
 # ✅ Secure API Key Handling
@@ -38,10 +38,8 @@ index = pc.Index(index_name)
 
 # ✅ Create LangChain Pinecone Wrapper Properly
 vectorstore = PineconeStore(
-    index=index_name,  # Use index name, not Index object
-    embedding_function=embeddings.embed_query,
-    pinecone_api_key=pinecone_api_key,
-    environment=pinecone_region
+    index=index,  # ✅ Correct way to pass Pinecone Index
+    embedding_function=embeddings.embed_query,  # ✅ Pass embeddings function
 )
 
 # ✅ Streamlit UI
@@ -50,14 +48,14 @@ st.write("Upload past studies to train AI or upload a new study for automated re
 
 # **🔹 Upload Documents & Add to Pinecone**
 st.header("📚 AI Learning Area (Upload Past Studies)")
-uploaded_file = st.file_uploader("Upload a past study (PDF)", type=["pdf"])
+uploaded_file = st.file_uploader("Upload a past study (TXT or PDF)", type=["txt", "pdf"])
 
 if uploaded_file:
-    text_content = uploaded_file.read().decode("utf-8")  # Convert PDF content to text
+    text_content = uploaded_file.read().decode("utf-8")  # Convert to text
     doc_embedding = embeddings.embed_query(text_content)
 
     # Store document in Pinecone (`ample-parking` index)
-    vectorstore.add_texts([text_content])
+    vectorstore.add_texts([text_content], embeddings=[doc_embedding])
 
     st.success("✅ Document indexed in Pinecone!")
 
@@ -69,6 +67,5 @@ if query:
     docs = vectorstore.similarity_search(query, k=3)  # Retrieve top 3 similar docs
     st.subheader("🔎 AI-Generated Results")
 
-    # ✅ Fixed Syntax Error in Loop
     for i, doc in enumerate(docs):
         st.write(f"**Result {i+1}:** {doc.page_content}")
