@@ -27,7 +27,7 @@ def extract_text_from_pdf(uploaded_file):
 def get_embedding(text):
     response = openai.embeddings.create(
         input=text,
-        model="text-embedding-3-large"  # ✅ Ensure correct embedding model
+        model="text-embedding-3-small"  # ✅ FIX: Use 1536-dimension model
     )
     
     embedding = response.data[0].embedding  # Extract embedding vector
@@ -56,7 +56,7 @@ if uploaded_file:
             embedding_vector = get_embedding(truncated_text)
 
         # ✅ Ensure correct vector dimensions
-        expected_dimension = 1536
+        expected_dimension = 1536  # 🔹 Matches Pinecone Index
         if len(embedding_vector) == expected_dimension:
             with st.spinner("Storing in Pinecone..."):
                 try:
