@@ -1,67 +1,101 @@
 import streamlit as st
 import os
+import shutil
 from langchain.document_loaders.pdf import PyPDFLoader
 from langchain.vectorstores import Chroma
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.llms import OpenAI
 import openai
 
-# Set OpenAI API Key (replace with your actual key)
+# Set OpenAI API Key (Replace with your actual key)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Define file storage paths for each category
-UPLOAD_DIRS = {
-    "Raw Study (Consultant Submission)": "uploads/raw_study",
-    "Annotated Study (City Edits)": "uploads/annotated_study",
-    "Traffic Review Response Letter": "uploads/response_letter"
-}
+# Define main storage directory
+PROJECTS_DIR = "projects"
 
-# Create directories if they don’t exist
-for dir_path in UPLOAD_DIRS.values():
-    os.makedirs(dir_path, exist_ok=True)
+# Ensure directory exists
+os.makedirs(PROJECTS_DIR, exist_ok=True)
 
 # Streamlit UI
-st.title("City of Phoenix Traffic Study RAG System")
-st.write("Upload and query traffic study documents.")
+st.title("Traffic Review AI Assistant")
+st.write("Upload a raw consultant report, and the AI will generate review comments and a traffic review letter based on past projects.")
 
-# Select project file bin
-selected_bin = st.selectbox("Select a document category:", list(UPLOAD_DIRS.keys()))
+# **Step 1: Enter Project Name**
+project_name = st.text_input("Enter project name:")
+if project_name:
+    project_folder = os.path.join(PROJECTS_DIR, project_name)
+    os.makedirs(project_folder, exist_ok=True)
 
-# Upload PDF
-uploaded_file = st.file_uploader(f"Upload a file to '{selected_bin}'", type=["pdf"])
+    # Define subfolders for each document type
+    file_paths = {
+        "Raw Consultant Study": os.path.join(project_folder, "raw_study.pdf"),
+        "Annotated Study (City Edits)": os.path.join(project_folder, "annotated_study.pdf"),
+        "Traffic Review Response Letter": os.path.join(project_folder, "review_letter.pdf")
+    }
 
-if uploaded_file is not None:
-    # Save file to selected bin
-    file_path = os.path.join(UPLOAD_DIRS[selected_bin], uploaded_file.name)
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    st.success(f"File uploaded to '{selected_bin}' successfully!")
+    uploaded_files = {}
 
-# Query Section
-st.subheader("Ask a question based on the selected document bin")
+    # **Step 2: Upload Files**
+    for category, file_path in file_paths.items():
+        uploaded_file = st.file_uploader(f"Upload '{category}'", type=["pdf"])
+        if uploaded_file:
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            uploaded_files[category] = file_path
+            st.success(f"Uploaded '{category}' for project '{project_name}'")
 
-query = st.text_input("Enter your question:")
-if st.button("Get Answer"):
-    if selected_bin in UPLOAD_DIRS:
-        folder_path = UPLOAD_DIRS[selected_bin]
-
-        # Load and process the documents in the selected bin
+    # **Step 3: Process Files and Train AI**
+    if len(uploaded_files) == 3:  # Ensure all three files are uploaded
         all_docs = []
-        for file in os.listdir(folder_path):
-            if file.endswith(".pdf"):
-                loader = PyPDFLoader(os.path.join(folder_path, file))
-                all_docs.extend(loader.load())
+        
+        for category, file_path in uploaded_files.items():
+            loader = PyPDFLoader(file_path)
+            docs = loader.load()
+            all_docs.extend(docs)
 
         if all_docs:
-            # Create vector store
-            vectorstore = Chroma.from_documents(all_docs, embedding=OpenAIEmbeddings())
+            # Create a vector store and save it for future queries
+            vectorstore = Chroma.from_documents(all_docs, OpenAIEmbeddings(), persist_directory=project_folder)
+            st.success(f"Project '{project_name}' has been indexed for AI review!")
 
-            # Perform similarity search
-            docs = vectorstore.similarity_search(query)
-            if docs:
-                st.write("**Answer:**")
-                st.write(docs[0].page_content)
-            else:
-                st.write("No relevant information found.")
+# **Step 4: Generate AI Review Comments & Letter**
+st.subheader("Generate AI-Based Traffic Review")
+
+# Select a project to generate a review
+available_projects = [p for p in os.listdir(PROJECTS_DIR) if os.path.isdir(os.path.join(PROJECTS_DIR, p))]
+selected_project = st.selectbox("Select a project for AI review:", available_projects if available_projects else ["No projects available"])
+
+if selected_project and selected_project != "No projects available":
+    project_folder = os.path.join(PROJECTS_DIR, selected_project)
+    
+    # Load the stored vector database
+    vectorstore = Chroma(persist_directory=project_folder, embedding_function=OpenAIEmbeddings())
+    
+    st.subheader("1️⃣ AI-Generated Comments on Consultant’s Study")
+    if st.button("Generate AI Comments"):
+        comments_prompt = """
+        You are a City Traffic Engineer reviewing a private consultant’s traffic impact analysis.
+        Based on past projects, generate review comments for this study, identifying necessary improvements.
+        Keep the feedback professional and aligned with City of Phoenix policies.
+        """
+        docs = vectorstore.similarity_search(comments_prompt)
+        if docs:
+            ai_comments = OpenAI().complete(comments_prompt + "\n\n" + docs[0].page_content)
+            st.write("### AI-Generated Comments:")
+            st.write(ai_comments)
         else:
-            st.write("No files found in this category.")
+            st.write("No relevant information found.")
+
+    st.subheader("2️⃣ AI-Generated Traffic Review Letter")
+    if st.button("Generate Traffic Review Letter"):
+        review_letter_prompt = """
+        You are a City Traffic Engineer drafting a formal traffic review response letter.
+        Based on past projects, generate a structured and professional letter addressing key findings, improvements, and City policy compliance.
+        """
+        docs = vectorstore.similarity_search(review_letter_prompt)
+        if docs:
+            ai_review_letter = OpenAI().complete(review_letter_prompt + "\n\n" + docs[0].page_content)
+            st.write("### AI-Generated Traffic Review Letter:")
+            st.write(ai_review_letter)
+        else:
+            st.write("No relevant information found.")
