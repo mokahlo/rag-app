@@ -43,14 +43,22 @@ if uploaded_file:
         extracted_text = extract_text_from_pdf(uploaded_file)
 
     if extracted_text:
+        # ✅ Limit metadata text size (Pinecone has limits)
+        truncated_text = extracted_text[:3000]  # Limit to 3000 chars for safety
+
         with st.spinner("Generating embeddings..."):
-            embedding_vector = get_embedding(extracted_text)
+            embedding_vector = get_embedding(truncated_text)
 
-        # ✅ Store in Pinecone
-        with st.spinner("Storing in Pinecone..."):
-            doc_id = f"doc-{uploaded_file.name}"
-            index.upsert(vectors=[(doc_id, embedding_vector, {"text": extracted_text})])
-
-        st.success("✅ Document stored successfully in Pinecone!")
+        # ✅ Ensure correct vector dimensions
+        if len(embedding_vector) == 1536:
+            with st.spinner("Storing in Pinecone..."):
+                try:
+                    doc_id = f"doc-{uploaded_file.name}"
+                    index.upsert(vectors=[(doc_id, embedding_vector, {"text": truncated_text})])
+                    st.success("✅ Document stored successfully in Pinecone!")
+                except pinecone.PineconeApiException as e:
+                    st.error(f"🚨 Pinecone API Error: {e}")
+        else:
+            st.error("❌ Embedding vector size mismatch. Expected 1536 dimensions.")
     else:
         st.error("❌ Could not extract text from the PDF. Try another file.")
