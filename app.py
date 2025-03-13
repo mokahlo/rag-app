@@ -30,8 +30,8 @@ if pinecone_index_name not in pc.list_indexes().names():
         )
     )
 
-# ✅ Connect to Pinecone Index Properly
-index = pc.Index(pinecone_index_name)  # This ensures we get the correct instance
+# ✅ Correctly Initialize Pinecone Index
+index = pc.Index(pinecone_index_name)  # ✅ Correct way to pass Pinecone instance
 
 # ✅ Streamlit App UI
 st.title("🚦 Traffic Review AI Assistant")
@@ -61,4 +61,11 @@ if raw_study and annotated_study and traffic_review_letter:
                 f.write(uploaded_file.getbuffer())
 
             # ✅ Process PDF and Load Documents
-            
+            loader = PyPDFLoader(file_path)
+            docs = loader.load()
+            all_docs.extend(docs)
+
+        # ✅ Store document embeddings in Pinecone
+        vectorstore = LangchainPinecone.from_documents(
+            documents=all_docs,
+            embedding=embedding
