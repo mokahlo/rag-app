@@ -1,87 +1,97 @@
-import streamlit as st
-import fitz  # PyMuPDF for PDF text extraction
-import os
-import tempfile
-import pinecone
-import openai
+import streamlit as st  # Web UI framework
+import os  # File management
+import fitz  # PyMuPDF for PDF text and annotation extraction
+from pinecone import Pinecone  # Pinecone vector database
+import openai  # OpenAI API for embeddings
 
-# ✅ Set up API keys (Ensure these are set in Streamlit Secrets)
+# ========================
+# ✅ Load API Keys from Streamlit Secrets
+# ========================
 OPENAI_API_KEY = st.secrets["OPENAI"]
 PINECONE_API_KEY = st.secrets["PINECONE"]
 PINECONE_ENV = "us-east-1"
-INDEX_NAME = "ample-traffic"
+INDEX_NAME = "ample-traffic"  # Pinecone index name
 
-# ✅ Initialize Pinecone
-pinecone_client = pinecone.Pinecone(api_key=PINECONE_API_KEY)
-if INDEX_NAME not in pinecone_client.list_indexes().names():
-    st.error(f"⚠️ Pinecone index '{INDEX_NAME}' not found. Check Pinecone setup.")
-index = pinecone_client.Index(INDEX_NAME)
+# ========================
+# ✅ Initialize Pinecone Client
+# ========================
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(INDEX_NAME)  # Connect to Pinecone index
 
-# ✅ Function to extract text from PDF
+# ========================
+# ✅ Function: Extract Text & Annotations from PDF
+# ========================
 def extract_text_from_pdf(uploaded_file):
-    """Extract text from a PDF uploaded via Streamlit."""
-    if uploaded_file is not None:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(uploaded_file.read())
-            temp_file_path = temp_file.name
+    """
+    Extracts both text and annotations (comments, highlights) from a PDF.
+    - Extracts raw text content from each page.
+    - Retrieves annotations such as comments, sticky notes, and highlights.
+    - Combines extracted text and annotations into one document.
+    """
+    with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+        text = "\n".join([page.get_text("text") for page in doc])  # Extract text
 
-        try:
-            doc = fitz.open(temp_file_path)
-            text = "\n".join([page.get_text("text") for page in doc])
-            doc.close()
-            os.remove(temp_file_path)
-            return text
-        except Exception as e:
-            st.error(f"⚠️ Error processing PDF: {str(e)}")
-            return None
-    return None
+        # Extract annotations (comments, highlights)
+        annotations = []
+        for page in doc:
+            for annot in page.annots():
+                if annot.info["content"]:  # Check if annotation has content
+                    annotations.append(f"Annotation on Page {page.number + 1}: {annot.info['content']}")
 
-# ✅ Function to get text embeddings
-def get_text_embedding(text):
-    """Generate text embeddings using OpenAI's 'text-embedding-3-large' model."""
-    response = openai.embeddings.create(
-        input=text,
-        model="text-embedding-3-large",
-        api_key=OPENAI_API_KEY
-    )
-    return response.data[0].embedding
+        # Combine text and annotations (if available)
+        full_text = text + "\n\n" + "\n".join(annotations) if annotations else text
 
-# ✅ Streamlit Web UI
-st.title("📄 Traffic Study Database with Pinecone")
-st.write("Upload traffic study documents to extract text, generate embeddings, and store them in Pinecone.")
+    return full_text
 
-# 📂 Upload raw, annotated study, and final review letter
-raw_study = st.file_uploader("Upload Raw Traffic Study (PDF)", type=["pdf"])
-annotated_study = st.file_uploader("Upload Annotated Study (PDF)", type=["pdf"])
-review_letter = st.file_uploader("Upload Traffic Review Letter (PDF)", type=["pdf"])
+# ========================
+# ✅ Function: Store Processed Data in Pinecone
+# ========================
+def process_and_store(pdf_file, doc_type):
+    """
+    Processes a PDF file by extracting text and annotations, then stores them in Pinecone.
+    - Uses OpenAI's text embedding model.
+    - Generates embeddings (1536 dimensions) for the extracted text.
+    - Stores embeddings and original text in Pinecone for future AI training.
+    """
+    if pdf_file:
+        st.write(f"📄 Processing {doc_type}...")
 
-# ✅ Process and store in Pinecone
-if st.button("📤 Store in Pinecone"):
+        # Extract text & annotations from the PDF
+        extracted_text = extract_text_from_pdf(pdf_file)
 
-    for doc_name, doc_file in [("raw_study", raw_study), 
-                               ("annotated_study", annotated_study), 
-                               ("review_letter", review_letter)]:
-        
-        if doc_file:
-            st.write(f"Processing {doc_name}...")
+        # Generate OpenAI embeddings (1536 dimensions)
+        embedding_model = "text-embedding-3-large"
+        embedding_vector = openai.Embedding.create(
+            input=extracted_text,
+            model=embedding_model,
+            api_key=OPENAI_API_KEY
+        )["data"][0]["embedding"]
 
-            # ✅ Extract text
-            text_content = extract_text_from_pdf(doc_file)
-            if text_content:
-                st.success(f"✅ Extracted text from {doc_name}")
+        # Store in Pinecone
+        doc_id = f"{doc_type}_{pdf_file.name}"  # Unique ID
+        index.upsert(vectors=[(doc_id, embedding_vector, {"text": extracted_text})])
 
-                # ✅ Generate embeddings
-                embedding_vector = get_text_embedding(text_content)
-                if len(embedding_vector) == 1536:  # Ensure correct embedding size
-                    st.success(f"✅ Embedding generated for {doc_name}")
+        st.success(f"✅ {doc_type} successfully stored in Pinecone!")
 
-                    # ✅ Store in Pinecone
-                    doc_id = f"{doc_name}-{doc_file.name}"
-                    index.upsert(vectors=[(doc_id, embedding_vector, {"text": text_content})])
-                    st.success(f"✅ Stored '{doc_name}' in Pinecone!")
-                else:
-                    st.error("❌ Embedding size mismatch. Expected 1536 dimensions.")
-            else:
-                st.error(f"⚠️ Could not extract text from {doc_name}.")
-        else:
-            st.warning(f"⚠️ No file uploaded for {doc_name}.")
+# ========================
+# ✅ Streamlit Web Interface
+# ========================
+st.title("🚦 AI-Powered Traffic Study Database")
+st.write("Upload traffic study documents to store them in Pinecone for AI training.")
+
+# Section: Upload PDFs
+st.header("📑 Upload Traffic Study Documents")
+raw_study = st.file_uploader("Upload Raw Traffic Study (Consultant Submission)", type=["pdf"])
+annotated_study = st.file_uploader("Upload Annotated Study (City Comments)", type=["pdf"])
+review_letter = st.file_uploader("Upload Final Review Letter", type=["pdf"])
+
+# Button to Process & Store Documents
+if st.button("📂 Process & Store Documents"):
+    if raw_study:
+        process_and_store(raw_study, "raw_study")
+    if annotated_study:
+        process_and_store(annotated_study, "annotated_study")
+    if review_letter:
+        process_and_store(review_letter, "review_letter")
+
+st.success("✅ All uploaded documents have been processed and stored!")
