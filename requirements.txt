@@ -1,17 +1,22 @@
-# NumPy for numerical operations and array handling
-numpy
-
-# Pandas for structured data processing and analysis
-pandas
-
-# Streamlit for building and deploying interactive web apps
+# Streamlit for building the web app interface
 streamlit
 
-# Pinecone client for vector database storage and retrieval
+# PyMuPDF (fitz) for extracting text and annotations from PDFs
+pymupdf
+
+# Pinecone for vector storage (storing embeddings)
 pinecone-client
 
-# OpenAI API for embeddings and AI model interactions
+# OpenAI for generating text embeddings
 openai
 
-# PyMuPDF (Fitz) for extracting text from PDF documents
-fitz
+# LangChain for managing AI-based document retrieval and processing
+langchain
+langchain-community
+langchain-pinecone
+
+# Additional dependencies for text processing and data handling
+tiktoken  # Tokenizer for OpenAI models
+numpy  # For handling numerical operations
+scikit-learn  # Machine learning utilities (optional)
+pandas  # Data analysis and storage in table format
