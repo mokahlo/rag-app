@@ -62,7 +62,7 @@ def process_and_store(uploaded_file, file_type):
     # 🔹 Generate Embeddings (Fixed Extraction)
     response = openai_client.embeddings.create(
         input=extracted_text + " " + extracted_annotations,
-        model="text-embedding-3-large"
+        model="text-embedding-ada-002"
     )
     embedding_vector = response.data[0].embedding  # ✅ FIXED
 
