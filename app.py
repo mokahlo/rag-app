@@ -77,6 +77,9 @@ def process_and_store(uploaded_file, file_type):
 st.title("🚦 Traffic Study Learning")
 st.write("Upload traffic study documents. The app will extract text & annotations and store them in a vector database.")
 
+# **🔹 Enter Project Name**
+project_name = st.text_input("Enter Project Name:")
+
 # **🔹 Upload Files**
 raw_study = st.file_uploader("Upload Raw Traffic Study", type=["pdf"])
 annotated_study = st.file_uploader("Upload Annotated Traffic Study", type=["pdf"])
@@ -84,6 +87,9 @@ review_letter = st.file_uploader("Upload Final Review Letter", type=["pdf"])
 
 # **🔹 Process & Store in Pinecone**
 if st.button("Store in Vector Database"):
-    process_and_store(raw_study, "Raw Study")
-    process_and_store(annotated_study, "Annotations")
-    process_and_store(review_letter, "Review Letter")
+    if project_name:
+        process_and_store(raw_study, "Raw Study")
+        process_and_store(annotated_study, "Annotations")
+        process_and_store(review_letter, "Review Letter")
+    else:
+         st.error("❌ Please enter a project name before storing data.")
