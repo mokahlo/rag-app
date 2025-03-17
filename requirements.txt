@@ -1,12 +1,3 @@
-# TensorFlow for AI model training and inference
-tensorflow==2.14.0
-
-# TensorFlow Hub for pre-trained NLP models (Universal Sentence Encoder)
-tensorflow-hub
-
-# TensorFlow Text for NLP processing support
-tensorflow-text
-
 # NumPy for numerical operations and array handling
 numpy
 
