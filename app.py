@@ -88,8 +88,8 @@ review_letter = st.file_uploader("Upload Final Review Letter", type=["pdf"])
 # **🔹 Process & Store in Pinecone**
 if st.button("Store in Vector Database"):
     if project_name:
-        process_and_store(raw_study, "Raw Study")
-        process_and_store(annotated_study, "Annotations")
-        process_and_store(review_letter, "Review Letter")
+        process_and_store(raw_study, "Raw Study", project_name)
+        process_and_store(annotated_study, "Annotations", project_name)
+        process_and_store(review_letter, "Review Letter", project_name)
     else:
          st.error("❌ Please enter a project name before storing data.")
