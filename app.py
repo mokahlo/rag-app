@@ -19,6 +19,13 @@ index = pc.Index(INDEX_NAME)
 TEMP_DIR = "temp"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
+# ✅ Function to generate a unique project name
+def generate_project_name(file_names):
+    """Generates a project name based on uploaded file names."""
+    concatenated_names = "_".join(sorted(file_names))  # Sort to maintain consistency
+    project_hash = hashlib.md5(concatenated_names.encode()).hexdigest()[:8]  # Short unique identifier
+    return f"Project_{project_hash}"
+
 # ✅ Function to extract text and annotations from PDFs
 def extract_text_from_pdf(pdf_path):
     """Extracts text and annotations from a PDF file."""
