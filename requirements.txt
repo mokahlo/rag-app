@@ -1,20 +1,26 @@
-# Streamlit for Web UI
-streamlit==1.43.2  
+# TensorFlow for AI model training and inference
+tensorflow==2.14.0
 
-# Pinecone for Vector Database
-pinecone-client==3.2.2  
+# TensorFlow Hub for pre-trained NLP models (Universal Sentence Encoder)
+tensorflow-hub
 
-# OpenAI for Embeddings
-openai==1.12.0  
+# TensorFlow Text for NLP processing support
+tensorflow-text
 
-# PDF Processing & OCR
-pymupdf==1.23.6  # PyMuPDF for text extraction
-pdf2image==1.16.3  # Convert PDF pages to images
-pytesseract==0.3.10  # OCR for extracting text from images
+# NumPy for numerical operations and array handling
+numpy
 
-# Image Processing Dependencies
-pillow==10.1.0  # Required for pdf2image
-numpy==1.26.4  # General support for numerical operations
+# Pandas for structured data processing and analysis
+pandas
 
-# Pinecone-specific requirements
-langchain-community==0.2.0  # LangChain integration for vector storage
+# Streamlit for building and deploying interactive web apps
+streamlit
+
+# Pinecone client for vector database storage and retrieval
+pinecone-client
+
+# OpenAI API for embeddings and AI model interactions
+openai
+
+# PyMuPDF (Fitz) for extracting text from PDF documents
+fitz
