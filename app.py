@@ -59,11 +59,12 @@ def process_and_store(uploaded_file, file_type):
     # 🔹 Extract Text and Annotations
     extracted_text, extracted_annotations = extract_text_from_pdf(file_path)
 
-    # 🔹 Generate Embeddings (1536 dimensions for Pinecone)
-    embedding_vector = openai_client.embeddings.create(
+    # 🔹 Generate Embeddings (Fixed Extraction)
+    response = openai_client.embeddings.create(
         input=extracted_text + " " + extracted_annotations,
         model="text-embedding-3-large"
-    )["data"][0]["embedding"]
+    )
+    embedding_vector = response.data[0].embedding  # ✅ FIXED
 
     # 🔹 Store in Pinecone (Annotations Included in Metadata)
     doc_id = hashlib.md5(project_name.encode()).hexdigest()
