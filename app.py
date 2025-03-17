@@ -58,7 +58,7 @@ def process_and_store(uploaded_file, doc_type):
     extracted_text, annotations = extract_text_from_pdf(file_path)
 
     # ✅ Generate embeddings using OpenAI's new API method
-    response = openai.Embedding.create(
+    response = openai.embeddings.create(
         model="text-embedding-3-large",  # Ensure correct embedding model
         input=extracted_text
     )
