@@ -27,81 +27,58 @@ TEMP_DIR = "temp"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # ✅ Function to Extract Text & Annotations from PDFs
-def extract_text_from_pdf(pdf_file):
-    """Extracts text and annotations from a PDF file."""
-    text = []
+def extract_text_from_pdf(pdf_path):
+    """Extracts both plain text and annotations from a given PDF file."""
+    text_content = []
     annotations = []
 
-    with fitz.open(pdf_file) as doc:
+    try:
+        doc = fitz.open(pdf_path)  # ✅ Open the PDF
         for page in doc:
-            text.append(page.get_text())  # Extracts page text
-            for annot in page.annots():  # Extracts annotations
-                if annot:
-                    annotations.append(annot.info["content"])
+            text_content.append(page.get_text("text"))  # ✅ Extract text from page
+            for annot in page.annots():  # ✅ Extract annotations (if any)
+                annotations.append(annot.info["content"])  # ✅ Store annotation text
+    except Exception as e:
+        st.error(f"❌ Error extracting text: {e}")
+        return "", ""
 
-    return " ".join(text), " ".join(annotations)
+    return " ".join(text_content), " ".join(annotations)
 
 # ✅ Function to Process & Store Documents in Pinecone
-def process_and_store(uploaded_file, file_type, project_name):
-    """Processes the uploaded PDF and stores embeddings in Pinecone."""
-    if uploaded_file is None:
-        return
-
-    # 🔹 Generate Unique Project Name
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    project_name = f"{file_type}_{timestamp}"
-
-    # 🔹 Save Uploaded File Temporarily
-    file_path = f"temp_{project_name}.pdf"
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
-    # 🔹 Extract Text and Annotations
+def process_and_store(file_path, file_type, project_name):
+    """Extracts text & annotations from a file and stores them in Pinecone with metadata."""
     extracted_text, extracted_annotations = extract_text_from_pdf(file_path)
 
-    # 🔹 Generate Embeddings (Fixed Extraction)
-    response = openai_client.embeddings.create(
-        input=extracted_text + " " + extracted_annotations,
-        model="text-embedding-ada-002"
-    )
-    embedding_vector = response.data[0].embedding  # ✅ FIXED
-
-  # 🔹 Store in Pinecone (Now Includes Project Name in Metadata)
+    # ✅ Generate a unique document ID
     doc_id = hashlib.md5((project_name + file_type).encode()).hexdigest()
-    index.upsert(
-        vectors=[
-            (
-                doc_id,
-                embedding_vector,
-                {
-                    "text": extracted_text,
-                    "annotations": extracted_annotations,
-                    "project_name": project_name,  # ✅ NEW: Adds project name
-                    "file_type": file_type,
-                },
-            )
-        ]
+
+    # ✅ OpenAI Embedding API Call
+    response = openai_client.embeddings.create(
+        model="text-embedding-3-large",  # ✅ Matches 1536-dimension requirement
+        input=extracted_text + " " + extracted_annotations  # ✅ Combine text & annotations
     )
 
-    # ✅ Success Message
-    st.success(f"✅ {file_type} for project '{project_name}' successfully stored in Pinecone!")
-# ✅ Streamlit UI
-st.title("🚦 Traffic Study Learning")
-st.write("Upload traffic study documents. The app will extract text & annotations and store them in a vector database.")
+    embedding_vector = response.data[0].embedding  # ✅ Correctly extract embedding
 
-# **🔹 Enter Project Name**
-project_name = st.text_input("Enter Project Name:")
+    # ✅ Store in Pinecone
+    index.upsert(
+        vectors=[(doc_id, embedding_vector, {"text": extracted_text, "annotations": extracted_annotations, "project_name": project_name})]
+    )
+    st.success(f"✅ Stored {file_type} for project '{project_name}' in Pinecone!")
 
-# **🔹 Upload Files**
-raw_study = st.file_uploader("Upload Raw Traffic Study", type=["pdf"])
-annotated_study = st.file_uploader("Upload Annotated Traffic Study", type=["pdf"])
-review_letter = st.file_uploader("Upload Final Review Letter", type=["pdf"])
+# ✅ Upload and Store Documents
+st.header("📂 Upload Traffic Study Documents")
+project_name = st.text_input("Enter project name:")
 
-# **🔹 Process & Store in Pinecone**
-if st.button("Store in Vector Database"):
+raw_study = st.file_uploader("Upload Raw Study (Consultant Submission)", type=["pdf"])
+annotated_study = st.file_uploader("Upload Annotated Study (City Edits)", type=["pdf"])
+review_letter = st.file_uploader("Upload Final Traffic Review Letter", type=["pdf"])
+
+# ✅ Process uploaded files if project name is provided
+if st.button("Store in Pinecone"):
     if project_name:
-        process_and_store(raw_study, "Raw Study", project_name)
-        process_and_store(annotated_study, "Annotations", project_name)
-        process_and_store(review_letter, "Review Letter", project_name)
+        if raw_study: process_and_store(raw_study, "raw_study", project_name)
+        if annotated_study: process_and_store(annotated_study, "annotated_study", project_name)
+        if review_letter: process_and_store(review_letter, "review_letter", project_name)
     else:
-         st.error("❌ Please enter a project name before storing data.")
+        st.error("❌ Please enter a project name before storing data.")
