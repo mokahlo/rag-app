@@ -66,13 +66,25 @@ def process_and_store(uploaded_file, file_type):
     )
     embedding_vector = response.data[0].embedding  # ✅ FIXED
 
-    # 🔹 Store in Pinecone (Annotations Included in Metadata)
-    doc_id = hashlib.md5(project_name.encode()).hexdigest()
-    index.upsert(vectors=[(doc_id, embedding_vector, {"text": extracted_text, "annotations": extracted_annotations})])
+  # 🔹 Store in Pinecone (Now Includes Project Name in Metadata)
+    doc_id = hashlib.md5((project_name + file_type).encode()).hexdigest()
+    index.upsert(
+        vectors=[
+            (
+                doc_id,
+                embedding_vector,
+                {
+                    "text": extracted_text,
+                    "annotations": extracted_annotations,
+                    "project_name": project_name,  # ✅ NEW: Adds project name
+                    "file_type": file_type,
+                },
+            )
+        ]
+    )
 
     # ✅ Success Message
-    st.success(f"✅ {file_type} successfully processed and stored in Pinecone!")
-
+    st.success(f"✅ {file_type} for project '{project_name}' successfully stored in Pinecone!")
 # ✅ Streamlit UI
 st.title("🚦 Traffic Study Learning")
 st.write("Upload traffic study documents. The app will extract text & annotations and store them in a vector database.")
