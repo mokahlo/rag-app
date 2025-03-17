@@ -54,7 +54,7 @@ def process_and_store(file_path, file_type, project_name):
 
     # ✅ OpenAI Embedding API Call
     response = openai_client.embeddings.create(
-        model="text-embedding-3-large",  # ✅ Matches 1536-dimension requirement
+        model="text-embedding-ada-002",  # ✅ Matches 1536-dimension requirement
         input=extracted_text + " " + extracted_annotations  # ✅ Combine text & annotations
     )
 
