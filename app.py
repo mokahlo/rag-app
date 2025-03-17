@@ -15,6 +15,10 @@ INDEX_NAME = "ample-traffic"  # Pinecone index name
 pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(INDEX_NAME)
 
+# ✅ Ensure the "temp" directory exists
+TEMP_DIR = "temp"
+os.makedirs(TEMP_DIR, exist_ok=True)
+
 # ✅ Function to extract text and annotations from PDFs
 def extract_text_from_pdf(pdf_path):
     """Extracts text and annotations from a PDF file."""
