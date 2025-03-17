@@ -42,7 +42,7 @@ def extract_text_from_pdf(pdf_file):
     return " ".join(text), " ".join(annotations)
 
 # ✅ Function to Process & Store Documents in Pinecone
-def process_and_store(uploaded_file, file_type):
+def process_and_store(uploaded_file, file_type, project_name):
     """Processes the uploaded PDF and stores embeddings in Pinecone."""
     if uploaded_file is None:
         return
