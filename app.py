@@ -49,6 +49,10 @@ def process_and_store(file_path, file_type, project_name):
     """Extracts text & annotations from a file and stores them in Pinecone with metadata."""
     extracted_text, extracted_annotations = extract_text_from_pdf(file_path)
 
+    # ✅ Ensure the 'uploads' directory exists
+    upload_dir = "uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+
     # ✅ Generate a unique document ID
     doc_id = hashlib.md5((project_name + file_type).encode()).hexdigest()
 
